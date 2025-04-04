@@ -99,7 +99,7 @@ def plot_Q_value_diff(Q_values_full, cmap, vmin, vmax):
     return Q_diff
 
 
-def self_control(prev_level_values, level):
+def self_control_with_values(prev_level_values, level):
 
     current_level_values = np.full((len(STATES), HORIZON), np.nan)
     current_level_policy = np.full((len(STATES), HORIZON), np.nan)
@@ -144,7 +144,68 @@ def self_control(prev_level_values, level):
     return current_level_values, current_level_policy, current_level_Q_values
 
 
+def self_control_with_actions(prev_level_effective_policy, level, states,
+                              actions, horizon, discount_factor_reward,
+                              discount_factor_cost, reward_func, cost_func,
+                              reward_func_last, cost_func_last, T):
+
+    V_real_full = []
+    Q_values_full = []
+
+    # solve for optimal policy for i_iter-agent,
+    # given real actions of future agents
+    for i_iter in range(horizon-1, -1, -1):
+
+        V_real = np.zeros((len(states), horizon+1))
+        Q_values = np.zeros(len(states), dtype=object)
+
+        for i_state, state in enumerate(states):
+
+            # arrays to store Q-values for each action in each state
+            Q_values[i_state] = np.full((len(actions[i_state]), horizon),
+                                        np.nan)
+
+            # "Q_values" for last time-step
+            V_real[i_state, -1] = (
+                (discount_factor_reward**(horizon-i_iter))
+                * reward_func_last[i_state]
+                + (discount_factor_cost**(horizon-i_iter))
+                * cost_func_last[i_state])
+
+        # backward induction to derive optimal policy starting from
+        # timestep i_iter
+        for i_timestep in range(horizon-1, i_iter-1, -1):
+
+            for i_state, state in enumerate(states):
+
+                Q = np.full(len(actions[i_state]), np.nan)
+
+                for i_action, action in enumerate(actions[i_state]):
+
+                    r = ((discount_factor_reward**(i_timestep-i_iter))
+                         * reward_func[i_state][i_action]
+                         + (discount_factor_cost**(i_timestep-i_iter))
+                         * cost_func[i_state][i_action])
+
+                    # q-value for each action (bellman equation)
+                    Q[i_action] = (T[i_state][i_action] @ r.T
+                                   + T[i_state][i_action]
+                                   @ V_real[states, i_timestep+1])
+
+                # find optimal action (which gives max q-value)
+                Q_values[i_state][:, i_timestep] = Q
+
+                # what are the real V's?
+                V_real[i_state, i_timestep] = Q[
+                    prev_level_effective_policy[i_state, i_timestep]]
+
+        V_real_full.append(V_real)
+        Q_values_full.append(Q_values)
+
+    return V_real_full, Q_values_full
+
 # %% set up MDP
+
 
 # states of markov chain
 N_INTERMEDIATE_STATES = 0
@@ -195,7 +256,7 @@ effective_naive_policy = np.array([policy_full[HORIZON-1-i][0][i]
 Q_diff_full = plot_Q_value_diff(Q_values_full, cmap='coolwarm',
                                 vmin=-0.5, vmax=0.5)
 
-# %% self control
+# %% self control with values
 
 # level -1 (all selves are naive)
 naive_values = np.array([V_full[HORIZON-1-i][:, i]
@@ -203,12 +264,12 @@ naive_values = np.array([V_full[HORIZON-1-i][:, i]
 
 # level 0 (each self considers naive Q-values of future ones)
 level = 0
-level_0_values, level_0_policy, level_0_Q_values = self_control(
+level_0_values, level_0_policy, level_0_Q_values = self_control_with_values(
     naive_values, level)
 
 # level 1 (each self considers level 0 Q-values of future ones)
 level = 1
-level_1_values, level_1_policy, level_1_Q_values = self_control(
+level_1_values, level_1_policy, level_1_Q_values = self_control_with_values(
     level_0_values, level)
 
 # plot level k policy and Q-values for state = 0
@@ -240,13 +301,4 @@ ax.tick_params()
 ax.set_xlabel('agent at timestep')
 ax.set_ylabel('level k diff in Q-values \n (WORK-SHIRK)')
 
-# %%
-# solve for common discount case
-reward_func, cost_func, reward_func_last, cost_func_last = (
-    get_reward_functions(STATES, REWARD_DO, EFFORT_DO, REWARD_COMPLETED,
-                         COST_COMPLETED)
-)
-T = get_transition_prob(STATES, EFFICACY)
-V_opt, policy_opt, Q_values = mdp_algms.find_optimal_policy_prob_rewards(
-    STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR_COMMON, reward_func,
-    reward_func_last, T)
+# %% self control with actions
