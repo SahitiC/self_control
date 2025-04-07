@@ -63,40 +63,35 @@ def get_transition_prob(states, efficacy):
     return T
 
 
-def plot_policy(policy_full, state, cmap, vmin=0, vmax=1):
+def plot_policy(policy_state, cmap, ylabel, xlabel, title='', vmin=0, vmax=1,):
     """
     heat map of full policy in state = state
     """
 
-    policy_state = [policy_full[i][state] for i in range(HORIZON)]
-    policy_state = np.array(policy_state)
     f, ax = plt.subplots(figsize=(5, 4), dpi=100)
     sns.heatmap(policy_state, linewidths=.5, cmap=cmap, vmin=vmin, vmax=vmax)
-    ax.set_xlabel('timestep')
-    ax.set_ylabel('horizon')
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
     ax.tick_params()
     colorbar = ax.collections[0].colorbar
     colorbar.set_ticks([0.25, 0.75])
     colorbar.set_ticklabels(['SHIRK', 'WORK'])
+    f.suptitle(title)
 
 
-def plot_Q_value_diff(Q_values_full, cmap, vmin, vmax):
+def plot_Q_value_diff(Q_diff, cmap, ylabel, xlabel, title='', vmin=-0.5,
+                      vmax=0.5):
     """
     plot diff in Q-values between actions for state=0 where there are two
     actions
     """
 
-    Q_values = [Q_values_full[i][0] for i in range(HORIZON)]
-    Q_diff = [a[1]-a[0] for a in Q_values]
-    Q_diff - np.array(Q_diff)
     f, ax = plt.subplots(figsize=(5, 4), dpi=100)
     sns.heatmap(Q_diff, linewidths=.5, cmap=cmap, vmin=vmin, vmax=vmax)
-    ax.set_xlabel('timestep')
-    ax.set_ylabel('horizon')
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
     ax.tick_params()
-    f.suptitle('diff in Q_values (WORK-SHIRK)')
-
-    return Q_diff
+    f.suptitle(title)
 
 
 def self_control_with_values(prev_level_values, level):
@@ -144,7 +139,7 @@ def self_control_with_values(prev_level_values, level):
     return current_level_values, current_level_policy, current_level_Q_values
 
 
-def self_control_with_actions(prev_level_effective_policy, level, states,
+def self_control_with_actions(prev_level_effective_policy, states,
                               actions, horizon, discount_factor_reward,
                               discount_factor_cost, reward_func, cost_func,
                               reward_func_last, cost_func_last, T):
@@ -219,7 +214,7 @@ ACTIONS[:-1] = [['shirk', 'work']
                 for i in range(len(STATES)-1)]
 ACTIONS[-1] = ['shirk']  # actions for final state
 
-HORIZON = 3  # deadline
+HORIZON = 15  # deadline
 DISCOUNT_FACTOR_REWARD = 0.9  # discounting factor for rewards
 DISCOUNT_FACTOR_COST = 0.7  # discounting factor for costs
 DISCOUNT_FACTOR_COMMON = 0.9  # common discount factor for both
@@ -246,15 +241,67 @@ V_full, policy_full, Q_values_full = (
         cost_func_last, T)
 )
 
-plot_policy(policy_full, state=0, cmap=sns.color_palette('husl', 2),
+policy_state_0 = [policy_full[i][0] for i in range(HORIZON)]
+policy_state_0 = np.array(policy_state_0)
+plot_policy(policy_state_0, cmap=sns.color_palette('husl', 2),
+            ylabel='horizon', xlabel='timestep',
             vmin=0, vmax=1)
 
 # actual policy followed by agent
-effective_naive_policy = np.array([policy_full[HORIZON-1-i][0][i]
-                                   for i in range(HORIZON)])
+effective_naive_policy = []
+for state in STATES:
+    effective_naive_policy.append(np.array([policy_full[HORIZON-1-i][state][i]
+                                            for i in range(HORIZON)]))
+effective_naive_policy = np.array(effective_naive_policy, dtype=int)
 
-Q_diff_full = plot_Q_value_diff(Q_values_full, cmap='coolwarm',
-                                vmin=-0.5, vmax=0.5)
+Q_values = [Q_values_full[i][0] for i in range(HORIZON)]
+Q_diff_full = [a[1]-a[0] for a in Q_values]
+Q_diff_full = np.array(Q_diff_full)
+plot_Q_value_diff(Q_diff_full, cmap='coolwarm',
+                  ylabel='horizon', xlabel='timestep',
+                  title='diff in Q_values (WORK-SHIRK)',
+                  vmin=-0.5, vmax=0.5)
+
+# %% self control with actions
+Q_diff_levels_state_0 = []
+policy_levels_state_0 = []
+
+Q_diff_naive = []
+for t in range(HORIZON):
+    Q_diff_naive.append(np.diff(Q_values_full[HORIZON-1-t][0][:, t])[0])
+
+Q_diff_levels_state_0.append(Q_diff_naive)
+policy_levels_state_0.append(effective_naive_policy[0])
+
+level_no = HORIZON-1
+effective_policy_prev_level = effective_naive_policy
+
+for level in range(level_no):
+
+    # calculate next level
+    V_current_level, Q_current_level = self_control_with_actions(
+        effective_policy_prev_level, STATES, ACTIONS, HORIZON,
+        DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func, cost_func,
+        reward_func_last, cost_func_last, T)
+
+    # update effective policy, Q_diff
+    effective_policy_prev_level = np.full((len(STATES), HORIZON), 100)
+    Q_diff = []  # diff only for state=0
+    for t in range(HORIZON):
+        Q_diff.append(np.diff(Q_current_level[HORIZON-1-t][0][:, t])[0])
+        for state in STATES:
+            effective_policy_prev_level[state, HORIZON-1-t] = np.argmax(
+                Q_current_level[t][state][:, HORIZON-1-t])
+
+    Q_diff_levels_state_0.append(Q_diff)
+    policy_levels_state_0.append(effective_policy_prev_level[0])
+
+plot_policy(np.array(policy_levels_state_0), cmap=sns.color_palette('husl', 2),
+            ylabel='level k effective policy', xlabel='agent at timestep')
+
+plot_Q_value_diff(np.array(Q_diff_levels_state_0), 'coolwarm',
+                  ylabel='level k diff in Q-values \n (WORK-SHIRK)',
+                  xlabel='agent at timestep', vmin=-0.3, vmax=0.3)
 
 # %% self control with values
 
@@ -273,18 +320,11 @@ level_1_values, level_1_policy, level_1_Q_values = self_control_with_values(
     level_0_values, level)
 
 # plot level k policy and Q-values for state = 0
-policy_levels_state_0 = [effective_naive_policy,
+policy_levels_state_0 = [effective_naive_policy[0],
                          level_0_policy[0],
                          level_1_policy[0]]
-f, ax = plt.subplots(figsize=(5, 4), dpi=100)
-sns.heatmap(np.array(policy_levels_state_0), linewidths=.5,
-            cmap=sns.color_palette('husl', 2))
-ax.tick_params()
-colorbar = ax.collections[0].colorbar
-colorbar.set_ticks([0.25, 0.75])
-colorbar.set_ticklabels(['SHIRK', 'WORK'])
-ax.set_xlabel('agent at timestep')
-ax.set_ylabel('level k effective policy')
+plot_policy(np.array(policy_levels_state_0), cmap=sns.color_palette('husl', 2),
+            ylabel='level k effective policy', xlabel='agent at timestep')
 
 Q_diff_naive = [Q_diff_full[HORIZON-1-i][i] for i in range(HORIZON)]
 Q_diff_level_0 = [a[0][1]-a[0][0] for a in level_0_Q_values]
@@ -294,11 +334,6 @@ Q_diff_levels_state_0 = [Q_diff_naive,
                          Q_diff_level_1]
 padded_data = np.array([row + [np.nan] * (HORIZON - len(row))
                         for row in Q_diff_levels_state_0])
-f, ax = plt.subplots(figsize=(5, 4), dpi=100)
-sns.heatmap(padded_data, linewidths=.5,
-            cmap='coolwarm', vmin=-0.5, vmax=0.5)
-ax.tick_params()
-ax.set_xlabel('agent at timestep')
-ax.set_ylabel('level k diff in Q-values \n (WORK-SHIRK)')
-
-# %% self control with actions
+plot_Q_value_diff(padded_data, 'coolwarm',
+                  ylabel='level k diff in Q-values \n (WORK-SHIRK)',
+                  xlabel='agent at timestep', vmin=-0.5, vmax=0.5)
