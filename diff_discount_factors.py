@@ -222,7 +222,7 @@ EFFICACY = 0.6  # self-efficacy (probability of progress on working)
 
 # utilities :
 REWARD_DO = 2.0
-EFFORT_DO = -1.0
+EFFORT_DO = -0.8
 # no delayed rewards:
 REWARD_COMPLETED = 0.0
 COST_COMPLETED = -0.0
