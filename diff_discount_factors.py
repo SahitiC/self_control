@@ -260,7 +260,7 @@ Q_diff_full = np.array(Q_diff_full)
 plot_Q_value_diff(Q_diff_full, cmap='coolwarm',
                   ylabel='horizon', xlabel='timestep',
                   title='diff in Q_values (WORK-SHIRK)',
-                  vmin=-0.5, vmax=0.5)
+                  vmin=-0.6, vmax=0.6)
 
 # %% self control with actions
 Q_diff_levels_state_0 = []
@@ -301,7 +301,7 @@ plot_policy(np.array(policy_levels_state_0), cmap=sns.color_palette('husl', 2),
 
 plot_Q_value_diff(np.array(Q_diff_levels_state_0), 'coolwarm',
                   ylabel='level k diff in Q-values \n (WORK-SHIRK)',
-                  xlabel='agent at timestep', vmin=-0.3, vmax=0.3)
+                  xlabel='agent at timestep', vmin=-0.65, vmax=0.65)
 
 # %% self control with values
 
