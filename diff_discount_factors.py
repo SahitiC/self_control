@@ -214,15 +214,15 @@ ACTIONS[:-1] = [['shirk', 'work']
                 for i in range(len(STATES)-1)]
 ACTIONS[-1] = ['shirk']  # actions for final state
 
-HORIZON = 15  # deadline
+HORIZON = 6  # deadline
 DISCOUNT_FACTOR_REWARD = 0.9  # discounting factor for rewards
-DISCOUNT_FACTOR_COST = 0.7  # discounting factor for costs
+DISCOUNT_FACTOR_COST = 0.6  # discounting factor for costs
 DISCOUNT_FACTOR_COMMON = 0.9  # common discount factor for both
 EFFICACY = 0.6  # self-efficacy (probability of progress on working)
 
 # utilities :
 REWARD_DO = 2.0
-EFFORT_DO = -0.8
+EFFORT_DO = -1.0
 # no delayed rewards:
 REWARD_COMPLETED = 0.0
 COST_COMPLETED = -0.0
