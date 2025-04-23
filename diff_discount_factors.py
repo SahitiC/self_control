@@ -246,6 +246,7 @@ policy_state_0 = np.array(policy_state_0)
 plot_policy(policy_state_0, cmap=sns.color_palette('husl', 2),
             ylabel='horizon', xlabel='timestep',
             vmin=0, vmax=1)
+plt.title('Naive policy')
 
 # actual policy followed by agent
 effective_naive_policy = []
