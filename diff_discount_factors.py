@@ -215,8 +215,8 @@ ACTIONS[:-1] = [['shirk', 'work']
 ACTIONS[-1] = ['shirk']  # actions for final state
 
 HORIZON = 6  # deadline
-DISCOUNT_FACTOR_REWARD = 0.9  # discounting factor for rewards
-DISCOUNT_FACTOR_COST = 0.6  # discounting factor for costs
+DISCOUNT_FACTOR_REWARD = 0.8  # discounting factor for rewards
+DISCOUNT_FACTOR_COST = 0.4  # discounting factor for costs
 DISCOUNT_FACTOR_COMMON = 0.9  # common discount factor for both
 EFFICACY = 0.6  # self-efficacy (probability of progress on working)
 
@@ -338,3 +338,53 @@ padded_data = np.array([row + [np.nan] * (HORIZON - len(row))
 plot_Q_value_diff(padded_data, 'coolwarm',
                   ylabel='level k diff in Q-values \n (WORK-SHIRK)',
                   xlabel='agent at timestep', vmin=-0.5, vmax=0.5)
+
+# %%
+
+discount_factors_cost = np.linspace(0.4, 0.8, 5)
+policies = np.full((HORIZON, len(discount_factors_cost)), 100, dtype=object)
+
+reward_func, cost_func, reward_func_last, cost_func_last = (
+    get_reward_functions(STATES, REWARD_DO, EFFORT_DO, REWARD_COMPLETED,
+                         COST_COMPLETED))
+T = get_transition_prob(STATES, EFFICACY)
+
+level_no = HORIZON-1
+
+for i_d, disc_cost in enumerate(discount_factors_cost):
+
+    # get naive policy
+    V_full, policy_full, Q_values_full = (
+        mdp_algms.find_optimal_policy_diff_discount_factors(
+            STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR_REWARD,
+            disc_cost, reward_func, cost_func, reward_func_last,
+            cost_func_last, T))
+
+    # actual policy followed by agent
+    effective_naive_policy = []
+    for state in STATES:
+        effective_naive_policy.append(
+            np.array([policy_full[HORIZON-1-i][state][i]
+                      for i in range(HORIZON)]))
+    effective_naive_policy = np.array(effective_naive_policy, dtype=int)
+    policies[0, i_d] = effective_naive_policy[0]
+
+    effective_policy_prev_level = effective_naive_policy
+
+    for level in range(level_no):
+
+        # calculate next level
+        V_current_level, Q_current_level = self_control_with_actions(
+            effective_policy_prev_level, STATES, ACTIONS, HORIZON,
+            DISCOUNT_FACTOR_REWARD, disc_cost, reward_func,
+            cost_func, reward_func_last, cost_func_last, T)
+
+        # update effective policy, Q_diff
+        effective_policy_prev_level = np.full((len(STATES), HORIZON), 100)
+        for t in range(HORIZON):
+            for state in STATES:
+                effective_policy_prev_level[state, HORIZON-1-t] = np.argmax(
+                    Q_current_level[t][state][:, HORIZON-1-t])
+
+        print(effective_policy_prev_level[0])
+        policies[level+1, i_d] = effective_policy_prev_level[0]
