@@ -1,3 +1,4 @@
+from scipy.stats import poisson
 import seaborn as sns
 import mdp_algms
 import matplotlib.pyplot as plt
@@ -8,6 +9,14 @@ mpl.rcParams['lines.linewidth'] = 2
 plt.rcParams['text.usetex'] = False
 
 # %%
+
+
+def normalized_poisson_pmf(mu, N):
+    true_poisson = [poisson.pmf(h, mu) for h in range(N+1)]
+    total = sum(true_poisson)
+    norm_poisson = [f / total for f in true_poisson]
+    assert np.isclose(sum(norm_poisson), 1.0, rtol=1e-9), 'sum of prob != 1'
+    return norm_poisson
 
 
 # construct reward functions separately for rewards and costs
@@ -187,10 +196,10 @@ def self_control_with_actions(prev_level_effective_policy, states,
                                    + T[i_state][i_action]
                                    @ V_real[states, i_timestep+1])
 
-                # find optimal action (which gives max q-value)
                 Q_values[i_state][:, i_timestep] = Q
 
-                # what are the real V's?
+                # what are the real V's? i.e. not the max Q value
+                # but the Q-value of the best action of the level-1 agent
                 V_real[i_state, i_timestep] = Q[
                     prev_level_effective_policy[i_state, i_timestep]]
 
@@ -199,8 +208,76 @@ def self_control_with_actions(prev_level_effective_policy, states,
 
     return V_real_full, Q_values_full
 
-# %% set up MDP
 
+def self_control_cognitive_hierarchy(policy_full_levels, level, mu, states,
+                                     actions, horizon, discount_factor_reward,
+                                     discount_factor_cost, reward_func,
+                                     cost_func, reward_func_last,
+                                     cost_func_last, T):
+
+    # normalised poisson of agents from 0 to level-1
+    poisson_prob = normalized_poisson_pmf(mu, level-1)
+
+    V_real_full = []
+    Q_values_full = []
+
+    # solve for optimal policy for i_iter-agent,
+    # given real actions of future agents
+    for i_iter in range(horizon-1, -1, -1):
+
+        V_real = np.zeros((len(states), horizon+1))
+        Q_values = np.zeros(len(states), dtype=object)
+
+        for i_state, state in enumerate(states):
+
+            # arrays to store Q-values for each action in each state
+            Q_values[i_state] = np.full((len(actions[i_state]), horizon),
+                                        np.nan)
+
+            # "Q_values" for last time-step
+            V_real[i_state, -1] = (
+                (discount_factor_reward**(horizon-i_iter))
+                * reward_func_last[i_state]
+                + (discount_factor_cost**(horizon-i_iter))
+                * cost_func_last[i_state])
+
+        # backward induction to derive optimal policy starting from
+        # timestep i_iter
+        for i_timestep in range(horizon-1, i_iter-1, -1):
+
+            for i_state, state in enumerate(states):
+
+                Q = np.full(len(actions[i_state]), np.nan)
+
+                for i_action, action in enumerate(actions[i_state]):
+
+                    r = ((discount_factor_reward**(i_timestep-i_iter))
+                         * reward_func[i_state][i_action]
+                         + (discount_factor_cost**(i_timestep-i_iter))
+                         * cost_func[i_state][i_action])
+
+                    # q-value for each action (bellman equation)
+                    Q[i_action] = (T[i_state][i_action] @ r.T
+                                   + T[i_state][i_action]
+                                   @ V_real[states, i_timestep+1])
+
+                Q_values[i_state][:, i_timestep] = Q
+
+                # what are the real V's? i.e. not the max Q value
+                # but the poisson-prob weighted Q-values of the best action of
+                # each of the 0 to level-1 agents
+                V_real[i_state, i_timestep] = sum(
+                    [poisson_prob[h]
+                     * Q[policy_full_levels[h, i_state, i_timestep]]
+                     for h in range(level)])
+
+        V_real_full.append(V_real)
+        Q_values_full.append(Q_values)
+
+    return V_real_full, Q_values_full
+
+
+# %% set up MDP
 
 # states of markov chain
 N_INTERMEDIATE_STATES = 0
@@ -215,8 +292,8 @@ ACTIONS[:-1] = [['shirk', 'work']
 ACTIONS[-1] = ['shirk']  # actions for final state
 
 HORIZON = 6  # deadline
-DISCOUNT_FACTOR_REWARD = 0.9  # discounting factor for rewards
-DISCOUNT_FACTOR_COST = 0.6  # discounting factor for costs
+DISCOUNT_FACTOR_REWARD = 0.7  # discounting factor for rewards
+DISCOUNT_FACTOR_COST = 0.5  # discounting factor for costs
 DISCOUNT_FACTOR_COMMON = 0.9  # common discount factor for both
 EFFICACY = 0.6  # self-efficacy (probability of progress on working)
 
@@ -226,6 +303,8 @@ EFFORT_DO = -1.0
 # no delayed rewards:
 REWARD_COMPLETED = 0.0
 COST_COMPLETED = -0.0
+
+MU = 1  # poisson hierarchy distribution mean
 
 # %% inconsistent policy with different discounts
 reward_func, cost_func, reward_func_last, cost_func_last = (
@@ -261,11 +340,12 @@ Q_diff_full = np.array(Q_diff_full)
 plot_Q_value_diff(Q_diff_full, cmap='coolwarm',
                   ylabel='horizon', xlabel='timestep',
                   title='diff in Q_values (WORK-SHIRK)',
-                  vmin=-0.6, vmax=0.6)
+                  vmin=-0.7, vmax=0.7)
 
 # %% self control with actions
 Q_diff_levels_state_0 = []
 policy_levels_state_0 = []
+policy_full_levels = []
 
 Q_diff_naive = []
 for t in range(HORIZON):
@@ -276,8 +356,9 @@ policy_levels_state_0.append(effective_naive_policy[0])
 
 level_no = HORIZON-1
 effective_policy_prev_level = effective_naive_policy
+policy_full_levels.append(effective_policy_prev_level)
 
-for level in range(level_no):
+for _ in range(level_no):
 
     # calculate next level
     V_current_level, Q_current_level = self_control_with_actions(
@@ -296,6 +377,7 @@ for level in range(level_no):
 
     Q_diff_levels_state_0.append(Q_diff)
     policy_levels_state_0.append(effective_policy_prev_level[0])
+    policy_full_levels.append(effective_policy_prev_level)
 
 plot_policy(np.array(policy_levels_state_0), cmap=sns.color_palette('husl', 2),
             ylabel='level k effective policy', xlabel='agent at timestep')
@@ -304,7 +386,54 @@ plot_Q_value_diff(np.array(Q_diff_levels_state_0), 'coolwarm',
                   ylabel='level k diff in Q-values \n (WORK-SHIRK)',
                   xlabel='agent at timestep', vmin=-0.65, vmax=0.65)
 
-# %% self control with values
+# %% self control - cognitive heirarchy
+# instead of assuming future agents are k-1 (i.e. exactly 1 level lower),
+# have a probability distribution over 0 to k-1
+Q_diff_levels_state_0 = []
+policy_levels_state_0 = []
+policy_full_levels = []
+
+Q_diff_naive = []
+for t in range(HORIZON):
+    Q_diff_naive.append(np.diff(Q_values_full[HORIZON-1-t][0][:, t])[0])
+
+Q_diff_levels_state_0.append(Q_diff_naive)
+policy_levels_state_0.append(effective_naive_policy[0])
+
+level_no = HORIZON-1
+effective_policy_prev_level = effective_naive_policy
+policy_full_levels.append(effective_policy_prev_level)
+
+for level in range(1, level_no+1):
+
+    # calculate next level
+    V_current_level, Q_current_level = self_control_cognitive_hierarchy(
+        np.array(policy_full_levels), level, MU, STATES, ACTIONS, HORIZON,
+        DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func, cost_func,
+        reward_func_last, cost_func_last, T)
+
+    # update effective policy, Q_diff
+    effective_policy_prev_level = np.full((len(STATES), HORIZON), 100)
+    Q_diff = []  # diff only for state=0
+    for t in range(HORIZON):
+        Q_diff.append(np.diff(Q_current_level[HORIZON-1-t][0][:, t])[0])
+        for state in STATES:
+            effective_policy_prev_level[state, HORIZON-1-t] = np.argmax(
+                Q_current_level[t][state][:, HORIZON-1-t])
+
+    Q_diff_levels_state_0.append(Q_diff)
+    policy_levels_state_0.append(effective_policy_prev_level[0])
+    policy_full_levels.append(effective_policy_prev_level)
+
+plot_policy(np.array(policy_levels_state_0), cmap=sns.color_palette('husl', 2),
+            ylabel='level k effective policy', xlabel='agent at timestep')
+
+plot_Q_value_diff(np.array(Q_diff_levels_state_0), 'coolwarm',
+                  ylabel='level k diff in Q-values \n (WORK-SHIRK)',
+                  xlabel='agent at timestep', vmin=-0.65, vmax=0.65)
+
+
+# %% self control with values: equivalent to removing discounting of future rewards
 
 # level -1 (all selves are naive)
 naive_values = np.array([V_full[HORIZON-1-i][:, i]
