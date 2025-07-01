@@ -4,6 +4,7 @@ import mdp_algms
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib as mpl
+from cycler import cycler
 mpl.rcParams['font.size'] = 14
 mpl.rcParams['lines.linewidth'] = 2
 plt.rcParams['text.usetex'] = False
@@ -209,14 +210,14 @@ def self_control_with_actions(prev_level_effective_policy, states,
     return V_real_full, Q_values_full
 
 
-def self_control_cognitive_hierarchy(policy_full_levels, level, mu, states,
+def self_control_cognitive_hierarchy(policy_full_levels, level, Lambda, states,
                                      actions, horizon, discount_factor_reward,
                                      discount_factor_cost, reward_func,
                                      cost_func, reward_func_last,
                                      cost_func_last, T):
 
     # normalised poisson of agents from 0 to level-1
-    poisson_prob = normalized_poisson_pmf(mu, level-1)
+    poisson_prob = normalized_poisson_pmf(Lambda, level-1)
 
     V_real_full = []
     Q_values_full = []
@@ -276,8 +277,122 @@ def self_control_cognitive_hierarchy(policy_full_levels, level, mu, states,
 
     return V_real_full, Q_values_full
 
+# %% get policies
+
+
+def get_naive_policy(horizon, discount_factor_reward, discount_factor_cost,
+                     reward_func, cost_func, reward_func_last, cost_func_last,
+                     T):
+
+    V_full, policy_full, Q_values_full = (
+        mdp_algms.find_optimal_policy_diff_discount_factors(
+            STATES, ACTIONS, horizon, discount_factor_reward,
+            discount_factor_cost, reward_func, cost_func, reward_func_last,
+            cost_func_last, T)
+    )
+
+    policy_state_0 = [policy_full[i][0] for i in range(horizon)]
+    policy_state_0 = np.array(policy_state_0)
+    # actual policy followed by agent
+    effective_naive_policy = []
+    for state in STATES:
+        effective_naive_policy.append(np.array(
+            [policy_full[horizon-1-i][state][i] for i in range(horizon)]))
+    effective_naive_policy = np.array(effective_naive_policy, dtype=int)
+
+    return policy_state_0, effective_naive_policy, Q_values_full, V_full
+
+
+def get_policy_self_control_actions(
+        Q_values_full_naive, effective_naive_policy, horizon,
+        discount_factor_reward, discount_factor_cost, reward_func, cost_func,
+        reward_func_last, cost_func_last, T):
+
+    Q_diff_levels_state_0 = []
+    policy_levels_state_0 = []
+    policy_full_levels = []
+
+    Q_diff_naive = []
+    for t in range(horizon):
+        Q_diff_naive.append(np.diff(
+            Q_values_full_naive[horizon-1-t][0][:, t])[0])
+
+    Q_diff_levels_state_0.append(Q_diff_naive)
+    policy_levels_state_0.append(effective_naive_policy[0])
+
+    level_no = horizon-1
+    effective_policy_prev_level = effective_naive_policy
+    policy_full_levels.append(effective_policy_prev_level)
+
+    for _ in range(level_no):
+
+        # calculate next level
+        V_current_level, Q_current_level = self_control_with_actions(
+            effective_policy_prev_level, STATES, ACTIONS, horizon,
+            discount_factor_reward, discount_factor_cost, reward_func,
+            cost_func, reward_func_last, cost_func_last, T)
+
+        # update effective policy, Q_diff
+        effective_policy_prev_level = np.full((len(STATES), horizon), 100)
+        Q_diff = []  # diff only for state=0
+        for t in range(HORIZON):
+            Q_diff.append(np.diff(Q_current_level[horizon-1-t][0][:, t])[0])
+            for state in STATES:
+                effective_policy_prev_level[state, horizon-1-t] = np.argmax(
+                    Q_current_level[t][state][:, horizon-1-t])
+
+        Q_diff_levels_state_0.append(Q_diff)
+        policy_levels_state_0.append(effective_policy_prev_level[0])
+        policy_full_levels.append(effective_policy_prev_level)
+
+    return Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels
+
+
+def get_policy_self_control_cog_hierarchy(
+        Q_values_full_naive, effective_naive_policy, horizon,
+        discount_factor_reward, discount_factor_cost, reward_func, cost_func,
+        reward_func_last, cost_func_last, T, Lambda):
+
+    Q_diff_levels_state_0 = []
+    policy_levels_state_0 = []
+    policy_full_levels = []
+
+    Q_diff_naive = []
+    for t in range(horizon):
+        Q_diff_naive.append(np.diff(
+            Q_values_full_naive[horizon-1-t][0][:, t])[0])
+
+    Q_diff_levels_state_0.append(Q_diff_naive)
+    policy_levels_state_0.append(effective_naive_policy[0])
+
+    level_no = horizon-1
+    policy_full_levels.append(effective_naive_policy)
+
+    for level in range(1, level_no+1):
+
+        # calculate next level
+        V_current_level, Q_current_level = self_control_cognitive_hierarchy(
+            np.array(policy_full_levels), level, Lambda, STATES, ACTIONS,
+            horizon, discount_factor_reward, discount_factor_cost, reward_func,
+            cost_func, reward_func_last, cost_func_last, T)
+
+        # update effective policy, Q_diff
+        effective_policy = np.full((len(STATES), horizon), 100)
+        Q_diff = []  # diff only for state=0
+        for t in range(horizon):
+            Q_diff.append(np.diff(Q_current_level[horizon-1-t][0][:, t])[0])
+            for state in STATES:
+                effective_policy[state, horizon-1-t] = np.argmax(
+                    Q_current_level[t][state][:, horizon-1-t])
+
+        Q_diff_levels_state_0.append(Q_diff)
+        policy_levels_state_0.append(effective_policy[0])
+        policy_full_levels.append(effective_policy)
+
+    return Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels
 
 # %% set up MDP
+
 
 # states of markov chain
 N_INTERMEDIATE_STATES = 0
@@ -304,37 +419,27 @@ EFFORT_DO = -1.0
 REWARD_COMPLETED = 0.0
 COST_COMPLETED = -0.0
 
-MU = 1  # poisson hierarchy distribution mean
+LAMBDA = 1  # poisson hierarchy distribution mean
 
 # %% inconsistent policy with different discounts
+
 reward_func, cost_func, reward_func_last, cost_func_last = (
     get_reward_functions(STATES, REWARD_DO, EFFORT_DO, REWARD_COMPLETED,
                          COST_COMPLETED))
 
 T = get_transition_prob(STATES, EFFICACY)
 
-V_full, policy_full, Q_values_full = (
-    mdp_algms.find_optimal_policy_diff_discount_factors(
-        STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR_REWARD,
-        DISCOUNT_FACTOR_COST, reward_func, cost_func, reward_func_last,
-        cost_func_last, T)
-)
+policy_state_0, effective_naive_policy, Q_values_full_naive, V_full_naive = get_naive_policy(
+    HORIZON, DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func,
+    cost_func, reward_func_last, cost_func_last, T)
 
-policy_state_0 = [policy_full[i][0] for i in range(HORIZON)]
-policy_state_0 = np.array(policy_state_0)
 plot_policy(policy_state_0, cmap=sns.color_palette('husl', 2),
             ylabel='horizon', xlabel='timestep',
             vmin=0, vmax=1)
 plt.title('Naive policy')
 
-# actual policy followed by agent
-effective_naive_policy = []
-for state in STATES:
-    effective_naive_policy.append(np.array([policy_full[HORIZON-1-i][state][i]
-                                            for i in range(HORIZON)]))
-effective_naive_policy = np.array(effective_naive_policy, dtype=int)
-
-Q_values = [Q_values_full[i][0] for i in range(HORIZON)]
+# Q-diff only for state 0
+Q_values = [Q_values_full_naive[i][0] for i in range(HORIZON)]
 Q_diff_full = [a[1]-a[0] for a in Q_values]
 Q_diff_full = np.array(Q_diff_full)
 plot_Q_value_diff(Q_diff_full, cmap='coolwarm',
@@ -343,41 +448,10 @@ plot_Q_value_diff(Q_diff_full, cmap='coolwarm',
                   vmin=-0.7, vmax=0.7)
 
 # %% self control with actions
-Q_diff_levels_state_0 = []
-policy_levels_state_0 = []
-policy_full_levels = []
-
-Q_diff_naive = []
-for t in range(HORIZON):
-    Q_diff_naive.append(np.diff(Q_values_full[HORIZON-1-t][0][:, t])[0])
-
-Q_diff_levels_state_0.append(Q_diff_naive)
-policy_levels_state_0.append(effective_naive_policy[0])
-
-level_no = HORIZON-1
-effective_policy_prev_level = effective_naive_policy
-policy_full_levels.append(effective_policy_prev_level)
-
-for _ in range(level_no):
-
-    # calculate next level
-    V_current_level, Q_current_level = self_control_with_actions(
-        effective_policy_prev_level, STATES, ACTIONS, HORIZON,
-        DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func, cost_func,
-        reward_func_last, cost_func_last, T)
-
-    # update effective policy, Q_diff
-    effective_policy_prev_level = np.full((len(STATES), HORIZON), 100)
-    Q_diff = []  # diff only for state=0
-    for t in range(HORIZON):
-        Q_diff.append(np.diff(Q_current_level[HORIZON-1-t][0][:, t])[0])
-        for state in STATES:
-            effective_policy_prev_level[state, HORIZON-1-t] = np.argmax(
-                Q_current_level[t][state][:, HORIZON-1-t])
-
-    Q_diff_levels_state_0.append(Q_diff)
-    policy_levels_state_0.append(effective_policy_prev_level[0])
-    policy_full_levels.append(effective_policy_prev_level)
+Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels = get_policy_self_control_actions(
+    Q_values_full_naive, effective_naive_policy, HORIZON,
+    DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func, cost_func,
+    reward_func_last, cost_func_last, T)
 
 plot_policy(np.array(policy_levels_state_0), cmap=sns.color_palette('husl', 2),
             ylabel='level k effective policy', xlabel='agent at timestep')
@@ -388,42 +462,12 @@ plot_Q_value_diff(np.array(Q_diff_levels_state_0), 'coolwarm',
 
 # %% self control - cognitive heirarchy
 # instead of assuming future agents are k-1 (i.e. exactly 1 level lower),
-# have a probability distribution over 0 to k-1
-Q_diff_levels_state_0 = []
-policy_levels_state_0 = []
-policy_full_levels = []
+# have a poisson probability distribution over 0 to k-1
 
-Q_diff_naive = []
-for t in range(HORIZON):
-    Q_diff_naive.append(np.diff(Q_values_full[HORIZON-1-t][0][:, t])[0])
-
-Q_diff_levels_state_0.append(Q_diff_naive)
-policy_levels_state_0.append(effective_naive_policy[0])
-
-level_no = HORIZON-1
-effective_policy_prev_level = effective_naive_policy
-policy_full_levels.append(effective_policy_prev_level)
-
-for level in range(1, level_no+1):
-
-    # calculate next level
-    V_current_level, Q_current_level = self_control_cognitive_hierarchy(
-        np.array(policy_full_levels), level, MU, STATES, ACTIONS, HORIZON,
-        DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func, cost_func,
-        reward_func_last, cost_func_last, T)
-
-    # update effective policy, Q_diff
-    effective_policy_prev_level = np.full((len(STATES), HORIZON), 100)
-    Q_diff = []  # diff only for state=0
-    for t in range(HORIZON):
-        Q_diff.append(np.diff(Q_current_level[HORIZON-1-t][0][:, t])[0])
-        for state in STATES:
-            effective_policy_prev_level[state, HORIZON-1-t] = np.argmax(
-                Q_current_level[t][state][:, HORIZON-1-t])
-
-    Q_diff_levels_state_0.append(Q_diff)
-    policy_levels_state_0.append(effective_policy_prev_level[0])
-    policy_full_levels.append(effective_policy_prev_level)
+Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels = get_policy_self_control_cog_hierarchy(
+    Q_values_full_naive, effective_naive_policy, HORIZON,
+    DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func, cost_func,
+    reward_func_last, cost_func_last, T, LAMBDA)
 
 plot_policy(np.array(policy_levels_state_0), cmap=sns.color_palette('husl', 2),
             ylabel='level k effective policy', xlabel='agent at timestep')
@@ -433,10 +477,10 @@ plot_Q_value_diff(np.array(Q_diff_levels_state_0), 'coolwarm',
                   xlabel='agent at timestep', vmin=-0.65, vmax=0.65)
 
 
-# %% self control with values: equivalent to removing discounting of future rewards
+# %% self control with values: equivalent to removing delay discounting
 
 # level -1 (all selves are naive)
-naive_values = np.array([V_full[HORIZON-1-i][:, i]
+naive_values = np.array([V_full_naive[HORIZON-1-i][:, i]
                          for i in range(HORIZON)]).T
 
 # level 0 (each self considers naive Q-values of future ones)
@@ -468,10 +512,12 @@ plot_Q_value_diff(padded_data, 'coolwarm',
                   ylabel='level k diff in Q-values \n (WORK-SHIRK)',
                   xlabel='agent at timestep', vmin=-0.5, vmax=0.5)
 
-# %%
+# %% vary discounts
 
+discount_factors_reward = [0.6, 0.75, 0.9]
 discount_factors_cost = np.linspace(0.4, 0.8, 5)
-policies = np.full((HORIZON, len(discount_factors_cost)), 100, dtype=object)
+policies = np.full((len(discount_factors_reward), len(discount_factors_cost)),
+                   np.nan, dtype=object)
 
 reward_func, cost_func, reward_func_last, cost_func_last = (
     get_reward_functions(STATES, REWARD_DO, EFFORT_DO, REWARD_COMPLETED,
@@ -480,40 +526,56 @@ T = get_transition_prob(STATES, EFFICACY)
 
 level_no = HORIZON-1
 
-for i_d, disc_cost in enumerate(discount_factors_cost):
+for i_r, disc_reward in enumerate(discount_factors_reward):
 
-    # get naive policy
-    V_full, policy_full, Q_values_full = (
-        mdp_algms.find_optimal_policy_diff_discount_factors(
-            STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR_REWARD,
-            disc_cost, reward_func, cost_func, reward_func_last,
-            cost_func_last, T))
+    for i_d, disc_cost in enumerate(discount_factors_cost):
 
-    # actual policy followed by agent
-    effective_naive_policy = []
-    for state in STATES:
-        effective_naive_policy.append(
-            np.array([policy_full[HORIZON-1-i][state][i]
-                      for i in range(HORIZON)]))
-    effective_naive_policy = np.array(effective_naive_policy, dtype=int)
-    policies[0, i_d] = effective_naive_policy[0]
-
-    effective_policy_prev_level = effective_naive_policy
-
-    for level in range(level_no):
-
-        # calculate next level
-        V_current_level, Q_current_level = self_control_with_actions(
-            effective_policy_prev_level, STATES, ACTIONS, HORIZON,
-            DISCOUNT_FACTOR_REWARD, disc_cost, reward_func,
+        # get naive policy
+        policy_state_0, effective_naive_policy, Q_values_full_naive, V_full_naive = get_naive_policy(
+            HORIZON, disc_reward, disc_cost, reward_func,
             cost_func, reward_func_last, cost_func_last, T)
 
-        # update effective policy, Q_diff
-        effective_policy_prev_level = np.full((len(STATES), HORIZON), 100)
-        for t in range(HORIZON):
-            for state in STATES:
-                effective_policy_prev_level[state, HORIZON-1-t] = np.argmax(
-                    Q_current_level[t][state][:, HORIZON-1-t])
+        # get strict k-1 policy
+        Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels = get_policy_self_control_actions(
+            Q_values_full_naive, effective_naive_policy, HORIZON,
+            disc_reward, disc_cost, reward_func, cost_func,
+            reward_func_last, cost_func_last, T)
 
-        print(effective_policy_prev_level[0])
-        policies[level+1, i_d] = effective_policy_prev_level[0]
+        policies[i_r, i_d] = policy_levels_state_0
+
+cmap_oranges = plt.get_cmap('Oranges')
+cycle_colors = cycler('color',
+                      cmap_oranges(np.linspace(0.3, 1, 4)))
+
+# naive policy
+for i_r in range(len(discount_factors_reward)):
+    policy = []
+    plt.figure(figsize=(6, 4))
+    for i_c in range(len(discount_factors_cost)):
+        policy.append(policies[i_r, i_c][0])
+    sns.heatmap(policy, cmap=sns.color_palette('husl', 2))
+    plt.yticks(label=discount_factors_cost)
+    plt.ylabel('discount factor cost')
+    plt.xlabel('timestep')
+
+# level 1 policy: when it starts and ends
+for i_r in range(len(discount_factors_reward)):
+    policy = []
+    plt.figure(figsize=(6, 4))
+    for i_c in range(len(discount_factors_cost)):
+        policy.append(policies[i_r, i_c][1])
+    sns.heatmap(policy, cmap=sns.color_palette('husl', 2))
+    plt.yticks(label=discount_factors_cost)
+    plt.ylabel('discount factor cost')
+    plt.xlabel('timestep')
+
+# level 2 policy: when it starts and ends
+for i_r in range(len(discount_factors_reward)):
+    policy = []
+    plt.figure(figsize=(6, 4))
+    for i_c in range(len(discount_factors_cost)):
+        policy.append(policies[i_r, i_c][2])
+    sns.heatmap(policy, cmap=sns.color_palette('husl', 2))
+    plt.yticks(label=discount_factors_cost)
+    plt.ylabel('discount factor cost')
+    plt.xlabel('timestep')
