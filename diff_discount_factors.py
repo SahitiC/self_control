@@ -288,8 +288,7 @@ def get_naive_policy(horizon, discount_factor_reward, discount_factor_cost,
         mdp_algms.find_optimal_policy_diff_discount_factors(
             STATES, ACTIONS, horizon, discount_factor_reward,
             discount_factor_cost, reward_func, cost_func, reward_func_last,
-            cost_func_last, T)
-    )
+            cost_func_last, T))
 
     policy_state_0 = [policy_full[i][0] for i in range(horizon)]
     policy_state_0 = np.array(policy_state_0)
@@ -304,7 +303,7 @@ def get_naive_policy(horizon, discount_factor_reward, discount_factor_cost,
 
 
 def get_policy_self_control_actions(
-        Q_values_full_naive, effective_naive_policy, horizon,
+        level_no, Q_values_full_naive, effective_naive_policy, horizon,
         discount_factor_reward, discount_factor_cost, reward_func, cost_func,
         reward_func_last, cost_func_last, T):
 
@@ -320,7 +319,6 @@ def get_policy_self_control_actions(
     Q_diff_levels_state_0.append(Q_diff_naive)
     policy_levels_state_0.append(effective_naive_policy[0])
 
-    level_no = horizon-1
     effective_policy_prev_level = effective_naive_policy
     policy_full_levels.append(effective_policy_prev_level)
 
@@ -349,7 +347,7 @@ def get_policy_self_control_actions(
 
 
 def get_policy_self_control_cog_hierarchy(
-        Q_values_full_naive, effective_naive_policy, horizon,
+        level_no, Q_values_full_naive, effective_naive_policy, horizon,
         discount_factor_reward, discount_factor_cost, reward_func, cost_func,
         reward_func_last, cost_func_last, T, Lambda):
 
@@ -365,7 +363,6 @@ def get_policy_self_control_cog_hierarchy(
     Q_diff_levels_state_0.append(Q_diff_naive)
     policy_levels_state_0.append(effective_naive_policy[0])
 
-    level_no = horizon-1
     policy_full_levels.append(effective_naive_policy)
 
     for level in range(1, level_no+1):
@@ -390,6 +387,55 @@ def get_policy_self_control_cog_hierarchy(
         policy_full_levels.append(effective_policy)
 
     return Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels
+
+# forward simulations
+
+
+def forward_sampling_k(
+        initial_state, Q_values_full_naive, effective_naive_policy, horizon,
+        discount_factor_reward, discount_factor_cost, reward_func, cost_func,
+        reward_func_last, cost_func_last, T, Lambda):
+    """
+    in the cognitive hierarchy case, each agent calculated its best course of
+    action assuming that the future agents are drawn from a normalised Poisson
+    distribution from levels 0 to k-1; so the agent calculated the expected
+    Q_values from this distribution of future policies - and chose its best
+    action based on this
+
+    alternatively, we can say that the future agent is one particular level
+    (k), and each agent samples from a poisson distribuion & then executes k+1
+    action
+    """
+
+    # forward simulation:
+    states_sim = np.full(horizon+1, 100)
+    actions_sim = np.full(horizon, 100)
+    levels_sim = np.full(horizon, 100)
+    states_sim[0] = initial_state
+
+    for t in range(horizon):
+
+        # sample level of t+1 agent (this fixes levels of t+2, ..., N agents)
+        level = np.random.poisson(lam=Lambda)
+        levels_sim[t] = level
+
+        # so the agent has to think from one level above, so caluclate policies
+        # until level+1 (with strict k-1 assumption)
+        level_no = level+1
+
+        Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels = get_policy_self_control_actions(
+            level_no, Q_values_full_naive, effective_naive_policy, horizon,
+            discount_factor_reward, discount_factor_cost, reward_func,
+            cost_func, reward_func_last, cost_func_last, T)
+
+        # what action to take
+        actions_sim[t] = policy_full_levels[level_no][states_sim[t]][t]
+
+        # state transition based on action
+        states_sim[t+1] = np.random.choice(
+            len(STATES), p=T[states_sim[t]][actions_sim[t]])
+
+    return states_sim, actions_sim, levels_sim
 
 # %% set up MDP
 
@@ -448,8 +494,9 @@ plot_Q_value_diff(Q_diff_full, cmap='coolwarm',
                   vmin=-0.7, vmax=0.7)
 
 # %% self control with actions
+level_no = HORIZON-1
 Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels = get_policy_self_control_actions(
-    Q_values_full_naive, effective_naive_policy, HORIZON,
+    level_no, Q_values_full_naive, effective_naive_policy, HORIZON,
     DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func, cost_func,
     reward_func_last, cost_func_last, T)
 
@@ -463,9 +510,9 @@ plot_Q_value_diff(np.array(Q_diff_levels_state_0), 'coolwarm',
 # %% self control - cognitive heirarchy
 # instead of assuming future agents are k-1 (i.e. exactly 1 level lower),
 # have a poisson probability distribution over 0 to k-1
-
+level_no = HORIZON-1
 Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels = get_policy_self_control_cog_hierarchy(
-    Q_values_full_naive, effective_naive_policy, HORIZON,
+    level_no, Q_values_full_naive, effective_naive_policy, HORIZON,
     DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func, cost_func,
     reward_func_last, cost_func_last, T, LAMBDA)
 
@@ -579,3 +626,50 @@ for i_r in range(len(discount_factors_reward)):
     plt.yticks(label=discount_factors_cost)
     plt.ylabel('discount factor cost')
     plt.xlabel('timestep')
+
+# %% sampling
+
+# in the cognitive hierarchy case, each agent calculated its best course of
+# action assuming that the future agents are drawn from a normalised Poisson
+# distribution from levels 0 to k-1; so the agent calculated the expected
+# Q_values from this distribution of future policies - and chose its best
+# action based on this
+
+# alternatively, we can say that the future agent is one particular level (k),
+# and each agent samples from a poisson distribuion & then executes k+1 action
+
+reward_func, cost_func, reward_func_last, cost_func_last = (
+    get_reward_functions(STATES, REWARD_DO, EFFORT_DO, REWARD_COMPLETED,
+                         COST_COMPLETED))
+
+T = get_transition_prob(STATES, EFFICACY)
+
+policy_state_0, effective_naive_policy, Q_values_full_naive, V_full_naive = get_naive_policy(
+    HORIZON, DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func,
+    cost_func, reward_func_last, cost_func_last, T)
+
+# forward simulation:
+initial_state = 0
+N_trials = 10
+state_list = []
+action_list = []
+level_list = []
+
+for _ in range(N_trials):
+
+    s, a, le = forward_sampling_k(
+        initial_state, Q_values_full_naive, effective_naive_policy, HORIZON,
+        DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func, cost_func,
+        reward_func_last, cost_func_last, T, LAMBDA)
+
+    state_list.append(s)
+    action_list.append(a)
+    level_list.append(le)
+
+state_array = np.array(state_list)
+action_array = np.array(action_list)
+
+# only consider actions associated with state 0
+valid = state_array[:, :-1] == 0
+actions_valid = np.where(valid, action_array, np.nan)
+average_action = np.nanmean(actions_valid, axis=0)
