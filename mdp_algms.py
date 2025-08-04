@@ -219,7 +219,91 @@ def find_optimal_policy_diff_discount_factors(
     return V_opt_full, policy_opt_full, Q_values_full
 
 
-def forward_runs(policy, V, initial_state, horizon, states, T):
+def find_optimal_policy_beta_delta(
+        states, actions, horizon, discount_beta, discount_delta,
+        reward_func, reward_func_last, T):
+    """
+    find optimal policy with beta-delta discounting
+
+     params:
+         states (ndarray): states of an MDP
+         actions (list): actions available in each state
+         horizon (int): number of timesteps in the task
+         discount_beta (float): additional discount for immediate timestep
+         discount_delta (float): exponential discount factor for future
+         reward_func (list): positive rewards obtained on taking an action and
+         transitioning to a specific state for each timestep and initial state
+         reward_func_last (list): positive rewards on final timestep only
+         cost_func (list): negative rewards obtained on taking an action and
+         transitioning to a specific state for each timestep and initial state
+         cost_func_last (list): negative rewards on final timestep only
+         T (list): transition probabilities for each action in a state
+
+     returns:
+         V_opt (ndarray): optimal values of actions to take at each timestep
+         and state
+         policy_opt (ndarray): map specifying optimal action to take at each
+         timestep and state
+         Q_values (list): optimal values for each timestep, action and state
+
+    """
+
+    V_opt_full = []
+    policy_opt_full = []
+    Q_values_full = []
+
+    # solve for optimal policy at every time step
+    for i_iter in range(horizon-1, -1, -1):
+
+        V_opt = np.zeros((len(states), horizon+1))
+        policy_opt = np.full((len(states), horizon), np.nan)
+        Q_values = np.zeros(len(states), dtype=object)
+
+        for i_state, state in enumerate(states):
+
+            # V_opt for last time-step
+            V_opt[i_state, -1] = (
+                (discount_beta*discount_delta**(horizon-i_iter))
+                * reward_func_last[i_state])
+            # arrays to store Q-values for each action in each state
+            Q_values[i_state] = np.full((len(actions[i_state]), horizon),
+                                        np.nan)
+
+        # backward induction to derive optimal policy starting from
+        # timestep i_iter
+        for i_timestep in range(horizon-1, i_iter-1, -1):
+
+            for i_state, state in enumerate(states):
+
+                Q = np.full(len(actions[i_state]), np.nan)
+
+                for i_action, action in enumerate(actions[i_state]):
+
+                    if i_timestep == i_iter:
+                        r = reward_func[i_state][i_action]
+                    else:
+                        r = ((discount_beta
+                              * discount_delta**(i_timestep-i_iter))
+                             * reward_func[i_state][i_action])
+
+                    # q-value for each action (bellman equation)
+                    Q[i_action] = (T[i_state][i_action] @ r.T
+                                   + T[i_state][i_action]
+                                   @ V_opt[states, i_timestep+1])
+
+                # find optimal action (which gives max q-value)
+                V_opt[i_state, i_timestep] = np.max(Q)
+                policy_opt[i_state, i_timestep] = np.argmax(Q)
+                Q_values[i_state][:, i_timestep] = Q
+
+        V_opt_full.append(V_opt)
+        policy_opt_full.append(policy_opt)
+        Q_values_full.append(Q_values)
+
+    return V_opt_full, policy_opt_full, Q_values_full
+
+
+def forward_runs(policy, initial_state, horizon, states, T):
     """
     simulate actions taken and states reached forward in time given
     a policy and initial state in an mdp
@@ -242,7 +326,6 @@ def forward_runs(policy, V, initial_state, horizon, states, T):
     # arrays to store states, actions taken and values of actions in time
     states_forward = np.full(horizon+1, 100)
     actions_forward = np.full(horizon, 100)
-    values_forward = np.full(horizon, np.nan)
 
     states_forward[0] = initial_state
 
@@ -251,15 +334,12 @@ def forward_runs(policy, V, initial_state, horizon, states, T):
         # action at a state and timestep as given by policy
         actions_forward[i_timestep] = policy[states_forward[i_timestep],
                                              i_timestep]
-        # corresponding value
-        values_forward[i_timestep] = V[states_forward[i_timestep], i_timestep]
         # sample next state from transition probabilities
         states_forward[i_timestep+1] = np.random.choice(
             len(states),
-            p=T[states_forward[i_timestep]][actions_forward[i_timestep]]
-        )
+            p=T[states_forward[i_timestep]][actions_forward[i_timestep]])
 
-    return states_forward, actions_forward, values_forward
+    return states_forward, actions_forward
 
 
 def forward_runs_prob(policy, Q_values, actions, initial_state, horizon,

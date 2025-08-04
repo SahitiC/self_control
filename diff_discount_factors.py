@@ -26,7 +26,7 @@ def get_reward_functions(states, reward_do, effort_do, reward_completed,
 
     reward_func = []
     cost_func = []
-    # reward for actions (dependis on current state and next state)
+    # reward for actions (depends on current state and next state)
     reward_func.append([np.array([0, 0]),
                         np.array([0, reward_do])])  # rewards for don't and do
     reward_func.append([np.array([0, 0])])  # rewards for completed
@@ -34,7 +34,7 @@ def get_reward_functions(states, reward_do, effort_do, reward_completed,
     # reward from final evaluation for the two states
     reward_func_last = np.array([0, reward_completed])
 
-    # effort for actions (dependis on current state and next state)
+    # effort for actions (depends on current state and next state)
     cost_func.append([np.array([0, 0]),  # rewards for don't and do
                       np.array([effort_do, effort_do])])
     cost_func.append([np.array([0, 0])])  # rewards for completed
@@ -73,7 +73,8 @@ def get_transition_prob(states, efficacy):
     return T
 
 
-def plot_policy(policy_state, cmap, ylabel, xlabel, title='', vmin=0, vmax=1,):
+def plot_heatmap(policy_state, cmap, ylabel='', xlabel='', title='', vmin=0,
+                 vmax=1,):
     """
     heat map of full policy in state = state
     """
@@ -277,8 +278,8 @@ def self_control_cognitive_hierarchy(policy_full_levels, level, Lambda, states,
 
     return V_real_full, Q_values_full
 
-# %% get policies
 
+# get policies
 
 def get_naive_policy(horizon, discount_factor_reward, discount_factor_cost,
                      reward_func, cost_func, reward_func_last, cost_func_last,
@@ -437,8 +438,41 @@ def forward_sampling_k(
 
     return states_sim, actions_sim, levels_sim
 
-# %% set up MDP
 
+def time_to_finish(trajectories, states_no):
+    """
+    find when all units arre completed for each trajectory
+    (of work) inputted; if threshold is never reached, returns NaN
+    """
+
+    times = []
+    trajectories = np.array(trajectories)
+    for trajectory in trajectories[:, 1:]:
+        if trajectory[-1] == states_no-1:
+            times.append(np.where(trajectory >= states_no-1)[0][0])
+        else:
+            times.append(np.nan)
+
+    return times
+
+
+def did_it_finish(trajectories, states_no):
+    """
+    find if all units have been completed for each trajectory inputted
+    """
+
+    completed = []
+    trajectories = np.array(trajectories)
+    for trajectory in trajectories[:, 1:]:
+        if trajectory[-1] == states_no-1:
+            completed.append(1)
+        else:
+            completed.append(0)
+
+    return completed
+
+
+# %% set up MDP
 
 # states of markov chain
 N_INTERMEDIATE_STATES = 0
@@ -453,9 +487,9 @@ ACTIONS[:-1] = [['shirk', 'work']
 ACTIONS[-1] = ['shirk']  # actions for final state
 
 HORIZON = 6  # deadline
-DISCOUNT_FACTOR_REWARD = 0.7  # discounting factor for rewards
-DISCOUNT_FACTOR_COST = 0.5  # discounting factor for costs
-DISCOUNT_FACTOR_COMMON = 0.9  # common discount factor for both
+DISCOUNT_FACTOR_REWARD = 0.75  # discounting factor for rewards
+DISCOUNT_FACTOR_COST = 0.4  # discounting factor for costs
+DISCOUNT_FACTOR_COMMON = 0.9  # common d iscount factor for both
 EFFICACY = 0.6  # self-efficacy (probability of progress on working)
 
 # utilities :
@@ -465,7 +499,7 @@ EFFORT_DO = -1.0
 REWARD_COMPLETED = 0.0
 COST_COMPLETED = -0.0
 
-LAMBDA = 1  # poisson hierarchy distribution mean
+LAMBDA = 0.5  # poisson hierarchy distribution mean
 
 # %% inconsistent policy with different discounts
 
@@ -479,9 +513,9 @@ policy_state_0, effective_naive_policy, Q_values_full_naive, V_full_naive = get_
     HORIZON, DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func,
     cost_func, reward_func_last, cost_func_last, T)
 
-plot_policy(policy_state_0, cmap=sns.color_palette('husl', 2),
-            ylabel='horizon', xlabel='timestep',
-            vmin=0, vmax=1)
+plot_heatmap(policy_state_0, cmap=sns.color_palette('husl', 2),
+             ylabel='horizon', xlabel='timestep',
+             vmin=0, vmax=1)
 plt.title('Naive policy')
 
 # Q-diff only for state 0
@@ -500,8 +534,9 @@ Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels = get_policy_se
     DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func, cost_func,
     reward_func_last, cost_func_last, T)
 
-plot_policy(np.array(policy_levels_state_0), cmap=sns.color_palette('husl', 2),
-            ylabel='level k effective policy', xlabel='agent at timestep')
+plot_heatmap(np.array(policy_levels_state_0),
+             cmap=sns.color_palette('husl', 2),
+             ylabel='level k effective policy', xlabel='agent at timestep')
 
 plot_Q_value_diff(np.array(Q_diff_levels_state_0), 'coolwarm',
                   ylabel='level k diff in Q-values \n (WORK-SHIRK)',
@@ -516,13 +551,13 @@ Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels = get_policy_se
     DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func, cost_func,
     reward_func_last, cost_func_last, T, LAMBDA)
 
-plot_policy(np.array(policy_levels_state_0), cmap=sns.color_palette('husl', 2),
-            ylabel='level k effective policy', xlabel='agent at timestep')
+plot_heatmap(np.array(policy_levels_state_0),
+             cmap=sns.color_palette('husl', 2),
+             ylabel='level k effective policy', xlabel='agent at timestep')
 
 plot_Q_value_diff(np.array(Q_diff_levels_state_0), 'coolwarm',
                   ylabel='level k diff in Q-values \n (WORK-SHIRK)',
                   xlabel='agent at timestep', vmin=-0.65, vmax=0.65)
-
 
 # %% self control with values: equivalent to removing delay discounting
 
@@ -544,8 +579,9 @@ level_1_values, level_1_policy, level_1_Q_values = self_control_with_values(
 policy_levels_state_0 = [effective_naive_policy[0],
                          level_0_policy[0],
                          level_1_policy[0]]
-plot_policy(np.array(policy_levels_state_0), cmap=sns.color_palette('husl', 2),
-            ylabel='level k effective policy', xlabel='agent at timestep')
+plot_heatmap(np.array(policy_levels_state_0),
+             cmap=sns.color_palette('husl', 2),
+             ylabel='level k effective policy', xlabel='agent at timestep')
 
 Q_diff_naive = [Q_diff_full[HORIZON-1-i][i] for i in range(HORIZON)]
 Q_diff_level_0 = [a[0][1]-a[0][0] for a in level_0_Q_values]
@@ -584,48 +620,46 @@ for i_r, disc_reward in enumerate(discount_factors_reward):
 
         # get strict k-1 policy
         Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels = get_policy_self_control_actions(
-            Q_values_full_naive, effective_naive_policy, HORIZON,
+            level_no, Q_values_full_naive, effective_naive_policy, HORIZON,
             disc_reward, disc_cost, reward_func, cost_func,
             reward_func_last, cost_func_last, T)
 
         policies[i_r, i_d] = policy_levels_state_0
 
-cmap_oranges = plt.get_cmap('Oranges')
-cycle_colors = cycler('color',
-                      cmap_oranges(np.linspace(0.3, 1, 4)))
+cmap = sns.color_palette('husl', 2)
 
 # naive policy
-for i_r in range(len(discount_factors_reward)):
+for i_r, disc_reward in enumerate(discount_factors_reward):
     policy = []
     plt.figure(figsize=(6, 4))
     for i_c in range(len(discount_factors_cost)):
         policy.append(policies[i_r, i_c][0])
-    sns.heatmap(policy, cmap=sns.color_palette('husl', 2))
-    plt.yticks(label=discount_factors_cost)
-    plt.ylabel('discount factor cost')
-    plt.xlabel('timestep')
+    plot_heatmap(policy, cmap, ylabel='discount factor cost',
+                 xlabel='timestep', title=rf'$\gamma_r$={disc_reward}')
+    plt.yticks(np.arange(len(discount_factors_cost))+0.5,
+               np.round(discount_factors_cost, 1))
 
 # level 1 policy: when it starts and ends
-for i_r in range(len(discount_factors_reward)):
+for i_r, disc_reward in enumerate(discount_factors_reward):
     policy = []
     plt.figure(figsize=(6, 4))
     for i_c in range(len(discount_factors_cost)):
         policy.append(policies[i_r, i_c][1])
-    sns.heatmap(policy, cmap=sns.color_palette('husl', 2))
-    plt.yticks(label=discount_factors_cost)
-    plt.ylabel('discount factor cost')
-    plt.xlabel('timestep')
+    plot_heatmap(policy, cmap, ylabel='discount factor cost',
+                 xlabel='timestep', title=rf'$\gamma_r$={disc_reward}')
+    plt.yticks(np.arange(len(discount_factors_cost))+0.5,
+               np.round(discount_factors_cost, 1))
 
 # level 2 policy: when it starts and ends
-for i_r in range(len(discount_factors_reward)):
+for i_r, disc_reward in enumerate(discount_factors_reward):
     policy = []
     plt.figure(figsize=(6, 4))
     for i_c in range(len(discount_factors_cost)):
         policy.append(policies[i_r, i_c][2])
-    sns.heatmap(policy, cmap=sns.color_palette('husl', 2))
-    plt.yticks(label=discount_factors_cost)
-    plt.ylabel('discount factor cost')
-    plt.xlabel('timestep')
+    plot_heatmap(policy, cmap, ylabel='discount factor cost',
+                 xlabel='timestep', title=rf'$\gamma_r$={disc_reward}')
+    plt.yticks(np.arange(len(discount_factors_cost))+0.5,
+               np.round(discount_factors_cost, 1))
 
 # %% sampling
 
@@ -638,38 +672,135 @@ for i_r in range(len(discount_factors_reward)):
 # alternatively, we can say that the future agent is one particular level (k),
 # and each agent samples from a poisson distribuion & then executes k+1 action
 
-reward_func, cost_func, reward_func_last, cost_func_last = (
-    get_reward_functions(STATES, REWARD_DO, EFFORT_DO, REWARD_COMPLETED,
-                         COST_COMPLETED))
+discount_factors_reward = [0.6, 0.75, 0.9]
+discount_factors_cost = np.linspace(0.4, 0.8, 5)
+times_naive = np.full((len(discount_factors_reward),
+                       len(discount_factors_cost)), np.nan)
+completed_naive = np.full((len(discount_factors_reward),
+                           len(discount_factors_cost)), np.nan)
+times = np.full((len(discount_factors_reward),
+                 len(discount_factors_cost)), np.nan)
+completed = np.full((len(discount_factors_reward),
+                     len(discount_factors_cost)), np.nan)
 
-T = get_transition_prob(STATES, EFFICACY)
+for i_r, disc_reward in enumerate(discount_factors_reward):
 
-policy_state_0, effective_naive_policy, Q_values_full_naive, V_full_naive = get_naive_policy(
-    HORIZON, DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func,
-    cost_func, reward_func_last, cost_func_last, T)
+    fig1, ax1 = plt.subplots(figsize=(5, 4))
+    fig2, ax2 = plt.subplots(figsize=(5, 4))
 
-# forward simulation:
-initial_state = 0
-N_trials = 10
-state_list = []
-action_list = []
-level_list = []
+    for i_d, disc_cost in enumerate(discount_factors_cost):
 
-for _ in range(N_trials):
+        reward_func, cost_func, reward_func_last, cost_func_last = (
+            get_reward_functions(STATES, REWARD_DO, EFFORT_DO,
+                                 REWARD_COMPLETED, COST_COMPLETED))
 
-    s, a, le = forward_sampling_k(
-        initial_state, Q_values_full_naive, effective_naive_policy, HORIZON,
-        DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func, cost_func,
-        reward_func_last, cost_func_last, T, LAMBDA)
+        T = get_transition_prob(STATES, EFFICACY)
 
-    state_list.append(s)
-    action_list.append(a)
-    level_list.append(le)
+        policy_state_0, effective_naive_policy, Q_values_full_naive, V_full_naive = get_naive_policy(
+            HORIZON, disc_reward, disc_cost, reward_func,
+            cost_func, reward_func_last, cost_func_last, T)
 
-state_array = np.array(state_list)
-action_array = np.array(action_list)
+        # forward simulation with naive policy:
+        initial_state = 0
+        N_trials = 500
+        state_naive_list = []
+        action_naive_list = []
+        for _ in range(N_trials):
+            s, a = mdp_algms.forward_runs(
+                effective_naive_policy, initial_state, HORIZON, STATES, T)
+            state_naive_list.append(s)
+            action_naive_list.append(a)
 
-# only consider actions associated with state 0
-valid = state_array[:, :-1] == 0
-actions_valid = np.where(valid, action_array, np.nan)
-average_action = np.nanmean(actions_valid, axis=0)
+        state_naive_array = np.array(state_naive_list)
+        action_naive_array = np.array(action_naive_list)
+        # only consider actions associated with state 0
+        valid = state_naive_array[:, :-1] == 0
+        actions_naive_valid = np.where(valid, action_naive_array, np.nan)
+        average_action_naive = np.nanmean(actions_naive_valid, axis=0)
+        average_state_naive = np.nanmean(state_naive_array, axis=0)
+        times_naive[i_r, i_d] = np.nanmean(
+            time_to_finish(state_naive_list, len(STATES)))
+        completed_naive[i_r, i_d] = np.nanmean(did_it_finish(
+            state_naive_list, len(STATES)))
+        ax1.plot(average_state_naive, marker='o', linestyle='dashed',
+                 linewidth=3, label=f'{np.round(disc_cost, 1)}')
+
+        # forward simulation with sampling k:
+        initial_state = 0
+        N_trials = 500
+        state_list = []
+        action_list = []
+        level_list = []
+        for _ in range(N_trials):
+            s, a, le = forward_sampling_k(
+                initial_state, Q_values_full_naive, effective_naive_policy,
+                HORIZON, disc_reward, disc_cost,
+                reward_func, cost_func, reward_func_last, cost_func_last, T,
+                LAMBDA)
+            state_list.append(s)
+            action_list.append(a)
+            level_list.append(le)
+
+        state_array = np.array(state_list)
+        action_array = np.array(action_list)
+        # only consider actions associated with state 0
+        valid = state_array[:, :-1] == 0
+        actions_valid = np.where(valid, action_array, np.nan)
+        average_action = np.nanmean(actions_valid, axis=0)
+        average_state = np.nanmean(state_array, axis=0)
+        times[i_r, i_d] = np.nanmean(time_to_finish(state_list, len(STATES)))
+        completed[i_r, i_d] = np.nanmean(
+            did_it_finish(state_list, len(STATES)))
+        ax2.plot(average_state, marker='o', linestyle='dashed', linewidth=3,
+                 label=f'{np.round(disc_cost, 1)}')
+
+    ax1.set_title(rf'naive $\gamma_r$={disc_reward}')
+    ax1.set_xlabel('time')
+    ax1.set_ylabel('average progress')
+    fig1.legend(title=r'$\gamma_c$', bbox_to_anchor=(1.15, 0.75))
+    ax2.set_title(rf'$\gamma_r$={disc_reward}')
+    ax2.set_xlabel('time')
+    ax2.set_ylabel('average progress')
+    fig2.legend(title=r'$\gamma_c$', bbox_to_anchor=(1.15, 0.75))
+
+# completion rates and times
+fig1, ax1 = plt.subplots(figsize=(5, 4))
+fig2, ax2 = plt.subplots(figsize=(5, 4))
+fig3, ax3 = plt.subplots(figsize=(5, 4))
+fig4, ax4 = plt.subplots(figsize=(5, 4))
+for i_r, disc_reward in enumerate(discount_factors_reward):
+
+    ax1.plot(times_naive[i_r, :], label=f'{np.round(disc_reward, 1)}',
+             marker='o', linestyle='--')
+    ax2.plot(times[i_r, :], label=f'{np.round(disc_reward, 1)}',
+             marker='o', linestyle='--')
+    ax3.plot(completed_naive[i_r, :], label=f'{np.round(disc_reward, 1)}',
+             marker='o', linestyle='--')
+    ax4.plot(completed[i_r, :], label=f'{np.round(disc_reward, 1)}',
+             marker='o', linestyle='--')
+
+ax1.set_xlabel('discount factor cost')
+ax2.set_xlabel('discount factor cost')
+ax3.set_xlabel('discount factor cost')
+ax4.set_xlabel('discount factor cost')
+
+ax1.set_xticks(ticks=np.arange(len(discount_factors_cost)),
+               labels=np.round(discount_factors_cost, 1))
+ax2.set_xticks(np.arange(len(discount_factors_cost)),
+               labels=np.round(discount_factors_cost, 1))
+ax3.set_xticks(np.arange(len(discount_factors_cost)),
+               labels=np.round(discount_factors_cost, 1))
+ax4.set_xticks(np.arange(len(discount_factors_cost)),
+               labels=np.round(discount_factors_cost, 1))
+
+ax1.set_title('completion times naive')
+ax2.set_title('completion times')
+ax3.set_title('completion rates naive')
+ax4.set_title('completion rates')
+
+fig1.legend(title=r'$\gamma_r$', bbox_to_anchor=(1.15, 0.75))
+fig2.legend(title=r'$\gamma_r$', bbox_to_anchor=(1.15, 0.75))
+fig3.legend(title=r'$\gamma_r$', bbox_to_anchor=(1.15, 0.75))
+fig4.legend(title=r'$\gamma_r$', bbox_to_anchor=(1.15, 0.75))
+
+# %% inference
