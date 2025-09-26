@@ -212,6 +212,171 @@ def self_control_with_actions(prev_level_effective_policy, states,
     return V_real_full, Q_values_full
 
 
+def find_optimal_policy_diff_discount_factors_habit(
+        p_sticky, states, actions, horizon, discount_factor_reward,
+        discount_factor_cost, reward_func, cost_func, reward_func_last,
+        cost_func_last, T):
+
+    V_opt_full = []
+    policy_opt_full = []
+    Q_values_full = []
+
+    # solve for optimal policy at every time step
+    for i_iter in range(horizon-1, -1, -1):
+
+        V_opt = np.zeros((len(states), horizon+1))
+        policy_opt = np.full((len(states), horizon), np.nan)
+        Q_values = np.zeros(len(states), dtype=object)
+
+        for i_state, state in enumerate(states):
+
+            # V_opt for last time-step
+            V_opt[i_state, -1] = ((discount_factor_reward**(horizon-i_iter))
+                                  * reward_func_last[i_state]
+                                  + (discount_factor_cost**(horizon-i_iter))
+                                  * cost_func_last[i_state])
+            # arrays to store Q-values for each action in each state
+            Q_values[i_state] = np.full((len(actions[i_state]), horizon),
+                                        np.nan)
+
+        # backward induction to derive optimal policy starting from
+        # timestep i_iter
+        for i_timestep in range(horizon-1, i_iter-1, -1):
+
+            for i_state, state in enumerate(states):
+
+                Q = np.full(len(actions[i_state]), np.nan)
+
+                for i_action, action in enumerate(actions[i_state]):
+
+                    # value of next state (if same as current state) in the
+                    # next timestep is: p * value of current action in next
+                    # state + (1-p) * value of optimal action in next state
+                    if i_timestep < horizon-1:
+                        value_next = np.full(len(states), 0.0)
+                        for next_state in range(len(states)):
+                            if next_state == i_state:
+                                opt_action = policy_opt[next_state,
+                                                        i_timestep+1]
+                                value_next[next_state] = (
+                                    p_sticky *
+                                    Q_values[next_state][i_action,
+                                                         i_timestep+1]
+                                    + (1-p_sticky) *
+                                    Q_values[next_state][int(opt_action),
+                                                         i_timestep+1])
+                            else:
+                                value_next[next_state] = V_opt[next_state,
+                                                               i_timestep+1]
+
+                    else:
+                        value_next = V_opt[:, i_timestep+1]
+
+                    r = ((discount_factor_reward**(i_timestep-i_iter))
+                         * reward_func[i_state][i_action]
+                         + (discount_factor_cost**(i_timestep-i_iter))
+                         * cost_func[i_state][i_action])
+
+                    # q-value for each action (bellman equation)
+                    Q[i_action] = (T[i_state][i_action] @ r.T
+                                   + T[i_state][i_action]
+                                   @ value_next)
+
+                # find optimal action (which gives max q-value)
+                V_opt[i_state, i_timestep] = np.max(Q)
+                policy_opt[i_state, i_timestep] = np.argmax(Q)
+                Q_values[i_state][:, i_timestep] = Q
+
+        V_opt_full.append(V_opt)
+        policy_opt_full.append(policy_opt)
+        Q_values_full.append(Q_values)
+
+    return V_opt_full, policy_opt_full, Q_values_full
+
+
+def self_control_with_actions_habit(prev_level_effective_policy, p_sticky,
+                                    states, actions, horizon,
+                                    discount_factor_reward,
+                                    discount_factor_cost, reward_func,
+                                    cost_func, reward_func_last,
+                                    cost_func_last, T):
+
+    V_real_full = []
+    Q_values_full = []
+
+    # solve for optimal policy for i_iter-agent,
+    # given real actions of future agents
+    for i_iter in range(horizon-1, -1, -1):
+
+        V_real = np.zeros((len(states), horizon+1))
+        Q_values = np.zeros(len(states), dtype=object)
+
+        for i_state, state in enumerate(states):
+
+            # arrays to store Q-values for each action in each state
+            Q_values[i_state] = np.full((len(actions[i_state]), horizon),
+                                        np.nan)
+
+            # "Q_values" for last time-step
+            V_real[i_state, -1] = (
+                (discount_factor_reward**(horizon-i_iter))
+                * reward_func_last[i_state]
+                + (discount_factor_cost**(horizon-i_iter))
+                * cost_func_last[i_state])
+
+        # backward induction to derive optimal policy starting from
+        # timestep i_iter
+        for i_timestep in range(horizon-1, i_iter-1, -1):
+
+            for i_state, state in enumerate(states):
+
+                Q = np.full(len(actions[i_state]), np.nan)
+
+                for i_action, action in enumerate(actions[i_state]):
+
+                    # value of next state (if same as current state) in the
+                    # next timestep is: p * value of current action in next
+                    # state + (1-p) * value of optimal action in next state
+                    if i_timestep < horizon-1:
+                        value_next = np.full(len(states), 0.0)
+                        for next_state in range(len(states)):
+                            if next_state == i_state:
+                                value_next[next_state] = (
+                                    p_sticky *
+                                    Q_values[next_state][i_action,
+                                                         i_timestep+1]
+                                    + (1-p_sticky) *
+                                    V_real[next_state, i_timestep+1])
+
+                            else:
+                                value_next[next_state] = V_real[next_state,
+                                                                i_timestep+1]
+                    else:
+                        value_next = V_real[:, i_timestep+1]
+
+                    r = ((discount_factor_reward**(i_timestep-i_iter))
+                         * reward_func[i_state][i_action]
+                         + (discount_factor_cost**(i_timestep-i_iter))
+                         * cost_func[i_state][i_action])
+
+                    # q-value for each action (bellman equation)
+                    Q[i_action] = (T[i_state][i_action] @ r.T
+                                   + T[i_state][i_action]
+                                   @ value_next)
+
+                Q_values[i_state][:, i_timestep] = Q
+
+                # what are the real V's? i.e. not the max Q value
+                # but the Q-value of the best action of the level-1 agent
+                V_real[i_state, i_timestep] = Q[
+                    prev_level_effective_policy[i_state, i_timestep]]
+
+        V_real_full.append(V_real)
+        Q_values_full.append(Q_values)
+
+    return V_real_full, Q_values_full
+
+
 def self_control_cognitive_hierarchy(policy_full_levels, level, Lambda, states,
                                      actions, horizon, discount_factor_reward,
                                      discount_factor_cost, reward_func,
@@ -284,13 +449,21 @@ def self_control_cognitive_hierarchy(policy_full_levels, level, Lambda, states,
 
 def get_naive_policy(states, actions, horizon, discount_factor_reward,
                      discount_factor_cost, reward_func, cost_func,
-                     reward_func_last, cost_func_last, T):
+                     reward_func_last, cost_func_last, T, sticky=False,
+                     p_sticky=None):
 
-    V_full, policy_full, Q_values_full = (
-        mdp_algms.find_optimal_policy_diff_discount_factors(
-            states, actions, horizon, discount_factor_reward,
-            discount_factor_cost, reward_func, cost_func, reward_func_last,
-            cost_func_last, T))
+    if sticky:
+        V_full, policy_full, Q_values_full = (
+            find_optimal_policy_diff_discount_factors_habit(
+                p_sticky, states, actions, horizon, discount_factor_reward,
+                discount_factor_cost, reward_func, cost_func, reward_func_last,
+                cost_func_last, T))
+    else:
+        V_full, policy_full, Q_values_full = (
+            mdp_algms.find_optimal_policy_diff_discount_factors(
+                states, actions, horizon, discount_factor_reward,
+                discount_factor_cost, reward_func, cost_func, reward_func_last,
+                cost_func_last, T))
 
     policy_state_0 = [policy_full[i][0] for i in range(horizon)]
     policy_state_0 = np.array(policy_state_0)
@@ -307,7 +480,8 @@ def get_naive_policy(states, actions, horizon, discount_factor_reward,
 def get_policy_self_control_actions(
         level_no, Q_values_full_naive, effective_naive_policy, states, actions,
         horizon, discount_factor_reward, discount_factor_cost, reward_func,
-        cost_func, reward_func_last, cost_func_last, T):
+        cost_func, reward_func_last, cost_func_last, T, sticky=False,
+        p_sticky=None):
 
     Q_diff_levels_state_0 = []
     policy_levels_state_0 = []
@@ -326,11 +500,18 @@ def get_policy_self_control_actions(
 
     for _ in range(level_no):
 
-        # calculate next level
-        V_current_level, Q_current_level = self_control_with_actions(
-            effective_policy_prev_level, states, actions, horizon,
-            discount_factor_reward, discount_factor_cost, reward_func,
-            cost_func, reward_func_last, cost_func_last, T)
+        if sticky:
+            # calculate next level
+            V_current_level, Q_current_level = self_control_with_actions_habit(
+                effective_policy_prev_level, p_sticky, states, actions,
+                horizon, discount_factor_reward, discount_factor_cost,
+                reward_func, cost_func, reward_func_last, cost_func_last, T)
+        else:
+            # calculate next level
+            V_current_level, Q_current_level = self_control_with_actions(
+                effective_policy_prev_level, states, actions, horizon,
+                discount_factor_reward, discount_factor_cost, reward_func,
+                cost_func, reward_func_last, cost_func_last, T)
 
         # update effective policy, Q_diff
         effective_policy_prev_level = np.full((len(states), horizon), 100)
@@ -491,9 +672,9 @@ if __name__ == 'main':
                     for i in range(len(STATES)-1)]
     ACTIONS[-1] = ['shirk']  # actions for final state
 
-    HORIZON = 3  # deadline
+    HORIZON = 6  # deadline
     DISCOUNT_FACTOR_REWARD = 0.75  # discounting factor for rewards
-    DISCOUNT_FACTOR_COST = 0.7  # discounting factor for costs
+    DISCOUNT_FACTOR_COST = 0.6  # discounting factor for costs
     DISCOUNT_FACTOR_COMMON = 0.9  # common d iscount factor for both
     EFFICACY = 0.6  # self-efficacy (probability of progress on working)
 
@@ -808,4 +989,39 @@ if __name__ == 'main':
     fig3.legend(title=r'$\gamma_r$', bbox_to_anchor=(1.15, 0.75))
     fig4.legend(title=r'$\gamma_r$', bbox_to_anchor=(1.15, 0.75))
 
-    # %% inference
+    # %% stickiness
+    # what if we had 1 step stickiness?
+
+    P_STICKY = 0.6
+    policy_state_0_h, effective_naive_policy_h, Q_values_full_naive_h, V_full_naive_h = get_naive_policy(
+        STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST,
+        reward_func, cost_func, reward_func_last, cost_func_last, T,
+        sticky=True, p_sticky=P_STICKY)
+
+    plot_heatmap(policy_state_0_h, cmap=sns.color_palette('husl', 2),
+                 ylabel='horizon', xlabel='timestep', vmin=0, vmax=1)
+    plt.title('Naive policy')
+
+    # Q-diff only for state 0
+    Q_values = [Q_values_full_naive_h[i][0] for i in range(HORIZON)]
+    Q_diff_full = [a[1]-a[0] for a in Q_values]
+    Q_diff_full = np.array(Q_diff_full)
+    plot_Q_value_diff(Q_diff_full, cmap='coolwarm',
+                      ylabel='horizon', xlabel='timestep',
+                      title='diff in Q_values (WORK-SHIRK)',
+                      vmin=-0.7, vmax=0.7)
+
+    level_no = HORIZON-1
+    Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels = get_policy_self_control_actions(
+        level_no, Q_values_full_naive_h, effective_naive_policy_h, STATES, ACTIONS,
+        HORIZON, DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func,
+        cost_func, reward_func_last, cost_func_last, T, sticky=True,
+        p_sticky=P_STICKY)
+
+    plot_heatmap(np.array(policy_levels_state_0),
+                 cmap=sns.color_palette('husl', 2),
+                 ylabel='level k effective policy', xlabel='agent at timestep')
+
+    plot_Q_value_diff(np.array(Q_diff_levels_state_0), 'coolwarm',
+                      ylabel='level k diff in Q-values \n (WORK-SHIRK)',
+                      xlabel='agent at timestep', vmin=-0.65, vmax=0.65)
