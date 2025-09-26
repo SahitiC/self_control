@@ -50,8 +50,9 @@ def plan_with_habits(p_sticky, states, actions, horizon, discount_factor,
 
             for i_action, action in enumerate(actions[i_state]):
 
-                # value of next state (if same as current state) in the next timestep is: 
-                # p * value of current action in next state + (1-p) * value of optimal action in next state
+                # value of next state (if same as current state) in the next
+                # timestep is: p * value of current action in next state +
+                # (1-p) * value of optimal action in next state
                 if i_timestep < horizon-1:
                     value_next = np.full(len(states), 0.0)
                     for next_state in range(len(states)):
