@@ -1,17 +1,15 @@
-from scipy.stats import poisson
+# %%
 import seaborn as sns
 import mdp_algms
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib as mpl
-from cycler import cycler
 mpl.rcParams['font.size'] = 14
 mpl.rcParams['lines.linewidth'] = 2
 plt.rcParams['text.usetex'] = False
 
+
 # %%
-
-
 def find_optimal_policy_beta_delta_habit(
         states, actions, horizon, discount_beta, discount_delta,
         reward_func, reward_func_last, T, p_sticky):
@@ -77,7 +75,7 @@ def find_optimal_policy_beta_delta_habit(
                     # q-value for each action (bellman equation)
                     Q[i_action] = (T[i_state][i_action] @ r.T
                                    + T[i_state][i_action]
-                                   @ V_opt[states, i_timestep+1])
+                                   @ value_next)
 
                 # find optimal action (which gives max q-value)
                 V_opt[i_state, i_timestep] = np.max(Q)
@@ -228,12 +226,10 @@ def self_control_with_actions_habit(prev_level_effective_policy, states,
 
     return V_real_full, Q_values_full
 
-# def get_rewards_at_end(reward_tempt, reward_resist, effort_tempt)
 
-# %%
+# %% health rewards at deadline
 
-
-states = np.arange(3)
+states = np.arange(2)
 
 # actions available in each state
 actions = np.full(len(states), np.nan, dtype=object)
@@ -243,13 +239,13 @@ actions[:-1] = [['tempt', 'resist']
 actions[-1] = ['final']  # actions for final state
 
 horizon = 4  # deadline
-discount_beta = 0.7  # discounting factor for rewards
+discount_beta = 0.5  # discounting factor for rewards
 discount_delta = 0.8  # discounting factor for costs
 
 # utilities :
 effort_resist = 0
 reward_tempt = 0.5
-reward_resist = 1.0
+reward_resist = 2.0
 
 # get reward matrix
 reward_func = []
@@ -274,6 +270,49 @@ t = np.full(len(states), 0.0)
 t[-1] = 1.0
 T.append([t])
 
+# %% health rewards one step later
+
+# states = 0 (no health reward pending), 1 (health reward pending)
+# if agent resists, state -> 1
+# if agent gets tempted, state -> 0
+states = np.arange(2)
+
+# actions available in each state
+actions = np.full(len(states), np.nan, dtype=object)
+actions = [['tempt', 'resist']
+           for i in range(len(states))]
+
+horizon = 4  # deadline
+discount_beta = 0.7  # discounting factor for rewards
+discount_delta = 0.8  # discounting factor for costs
+
+# utilities :
+effort_resist = 0
+reward_tempt = 0.5
+reward_resist = 0.8
+
+# get reward matrix
+reward_func = []
+# reward for state 0, for tempt, resist
+# if tempt -> r_tempt and if resist -> e_resist
+# (doesn't matter what the next state is ):
+reward_func.append([np.full(len(states), reward_tempt),
+                    np.full(len(states), effort_resist)])
+# reward for state 1, for tempt, resist
+# if tempt -> r_tempt and if resist -> e_resist + r_resist from last timestep
+# in both cases (doesn't matter what the next state is  )
+reward_func.append([np.full(len(states), reward_resist + reward_tempt),
+                    np.full(len(states), reward_resist + effort_resist)])
+reward_func_last = np.array([0.0, reward_resist])
+
+# get transition function
+T = []
+# transition for state 0, if tempt -> state 0, if resist -> state 1
+T.append([np.array([1, 0]),
+          np.array([0, 1])])
+# transition for state 1, if tempt -> state 0, if resist -> state 1
+T.append([np.array([1, 0]),
+          np.array([0, 1])])
 
 # %%
 Q_diffs_state_0 = []
@@ -378,6 +417,7 @@ ax.tick_params()
 colorbar = ax.collections[0].colorbar
 colorbar.set_ticks([0.25, 0.75])
 colorbar.set_ticklabels(['DEFECT', 'RESIST'])
+plt.show()
 
 # %%
 Q_diffs_state_0 = []
@@ -388,7 +428,7 @@ V_opt_full, policy_full, Q_values_full = find_optimal_policy_beta_delta_habit(
     states, actions, horizon, discount_beta, discount_delta,
     reward_func, reward_func_last, T, P_STICKY)
 
-state_to_plot = 1
+state_to_plot = 0
 
 policy_state_0 = [policy_full[i][state_to_plot] for i in range(horizon)]
 policy_state_0 = np.array(policy_state_0)
@@ -483,6 +523,7 @@ ax.tick_params()
 colorbar = ax.collections[0].colorbar
 colorbar.set_ticks([0.25, 0.75])
 colorbar.set_ticklabels(['DEFECT', 'RESIST'])
+plt.show()
 
 # %% precommit
 

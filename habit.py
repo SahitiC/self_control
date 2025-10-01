@@ -1,3 +1,4 @@
+# %%
 import numpy as np
 import matplotlib.pyplot as plt
 import mdp_algms
@@ -160,3 +161,4 @@ colorbar = ax.collections[0].colorbar
 colorbar.set_ticks([0.25, 0.75])
 colorbar.set_ticklabels(['SHIRK', 'WORK'])
 ax.set_yticklabels([0, 0.1, 0.3, 0.6, 0.9])
+plt.show()
