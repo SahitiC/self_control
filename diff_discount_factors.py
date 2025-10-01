@@ -673,8 +673,8 @@ if __name__ == 'main':
     ACTIONS[-1] = ['shirk']  # actions for final state
 
     HORIZON = 6  # deadline
-    DISCOUNT_FACTOR_REWARD = 0.75  # discounting factor for rewards
-    DISCOUNT_FACTOR_COST = 0.6  # discounting factor for costs
+    DISCOUNT_FACTOR_REWARD = 0.7  # discounting factor for rewards
+    DISCOUNT_FACTOR_COST = 0.5  # discounting factor for costs
     DISCOUNT_FACTOR_COMMON = 0.9  # common d iscount factor for both
     EFFICACY = 0.6  # self-efficacy (probability of progress on working)
 
@@ -992,7 +992,7 @@ if __name__ == 'main':
     # %% stickiness
     # what if we had 1 step stickiness?
 
-    P_STICKY = 0.6
+    P_STICKY = 0.7
     policy_state_0_h, effective_naive_policy_h, Q_values_full_naive_h, V_full_naive_h = get_naive_policy(
         STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST,
         reward_func, cost_func, reward_func_last, cost_func_last, T,
