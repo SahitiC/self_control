@@ -422,7 +422,7 @@ plt.show()
 # %%
 Q_diffs_state_0 = []
 policys_state_0 = []
-P_STICKY = 0.9
+P_STICKY = 0.6
 
 V_opt_full, policy_full, Q_values_full = find_optimal_policy_beta_delta_habit(
     states, actions, horizon, discount_beta, discount_delta,
