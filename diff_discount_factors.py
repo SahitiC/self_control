@@ -1,16 +1,16 @@
+# %%
 from scipy.stats import poisson
 import seaborn as sns
 import mdp_algms
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib as mpl
-from cycler import cycler
 mpl.rcParams['font.size'] = 14
 mpl.rcParams['lines.linewidth'] = 2
 plt.rcParams['text.usetex'] = False
 
-# %%
 
+# %%
 
 def normalized_poisson_pmf(mu, N):
     true_poisson = [poisson.pmf(h, mu) for h in range(N+1)]
@@ -45,6 +45,45 @@ def get_reward_functions(states, reward_do, effort_do, reward_completed,
     return reward_func, cost_func, reward_func_last, cost_func_last
 
 
+# construct reward functions separately for rewards and costs with exceptions
+def get_reward_functions_exception(
+        states, reward_do_normal, effort_do_normal, reward_do_exception,
+        effort_do_exception, reward_completed, cost_completed):
+
+    reward_func = []
+    cost_func = []
+    # reward for actions (depends on current state and next state)
+    # for normal states
+    reward_func.append([np.array([0, 0, 0, 0]),
+                        np.array([0, reward_do_normal, 0, reward_do_normal])])
+    reward_func.append([np.array([0, 0, 0, 0])])
+    # for exception states
+    reward_func.append([np.array([0, 0, 0, 0]),
+                        np.array([0, reward_do_exception,
+                                  0, reward_do_exception])])
+    reward_func.append([np.array([0, 0, 0, 0])])
+
+    # reward from final evaluation for the states
+    reward_func_last = np.array([0, reward_completed, 0, reward_completed])
+
+    # effort for actions (depends on current state and next state)
+    # for normal states
+    cost_func.append([np.array([0, 0, 0, 0]),
+                      np.array([effort_do_normal, effort_do_normal,
+                                effort_do_normal, effort_do_normal])])
+    cost_func.append([np.array([0, 0, 0, 0])])
+    # for exception states
+    cost_func.append([np.array([0, 0, 0, 0]),
+                      np.array([effort_do_exception, effort_do_exception,
+                                effort_do_exception, effort_do_exception])])
+    cost_func.append([np.array([0, 0, 0, 0])])
+
+    # reward from final evaluation for the two states
+    cost_func_last = np.array([cost_completed, 0, cost_completed, 0])
+
+    return reward_func, cost_func, reward_func_last, cost_func_last
+
+
 # construct common reward functions
 def get_reward_functions_common(states, reward_do, effort_do, reward_completed,
                                 cost_completed):
@@ -73,11 +112,27 @@ def get_transition_prob(states, efficacy):
     return T
 
 
+def get_transition_prob_exception(states, efficacy, p_exception):
+
+    T = np.full(len(states), np.nan, dtype=object)
+
+    T[0] = [np.array([1-p_exception, 0, p_exception, 0]),
+            np.array([(1-efficacy)*(1-p_exception), efficacy*(1-p_exception),
+                      (1-efficacy)*p_exception, efficacy*p_exception])]
+    T[1] = [np.array([0, 1*(1-p_exception), 0, 1*p_exception])]
+    # for exception states:
+    T[2] = [np.array([1-p_exception, 0, p_exception, 0]),
+            np.array([(1-efficacy)*(1-p_exception), efficacy*(1-p_exception),
+                      (1-efficacy)*p_exception, efficacy*p_exception])]
+    T[3] = [np.array([0, 1*(1-p_exception), 0, 1*p_exception])]
+    return T
+
+
 def plot_heatmap(policy_state, cmap, ylabel='', xlabel='', title='',
                  colorbar_ticks=[0.25, 0.75],
                  colorbar_ticklabels=['SHIRK', 'WORK'], vmin=0, vmax=1):
     """
-    heat map of full policy in state = state
+    heat map of full policy in a given state
     """
 
     f, ax = plt.subplots(figsize=(5, 4), dpi=100)
@@ -94,7 +149,7 @@ def plot_heatmap(policy_state, cmap, ylabel='', xlabel='', title='',
 def plot_Q_value_diff(Q_diff, cmap, ylabel, xlabel, title='', vmin=-0.5,
                       vmax=0.5):
     """
-    plot diff in Q-values between actions for state=0 where there are two
+    plot diff in Q-values between actions for a given state where there are two
     actions
     """
 
@@ -255,7 +310,7 @@ def find_optimal_policy_diff_discount_factors_habit(
                     if i_timestep < horizon-1:
                         value_next = np.full(len(states), 0.0)
                         for next_state in range(len(states)):
-                            if next_state == i_state:
+                            if actions[next_state] == actions[i_state]:
                                 opt_action = policy_opt[next_state,
                                                         i_timestep+1]
                                 value_next[next_state] = (
@@ -340,7 +395,7 @@ def self_control_with_actions_habit(prev_level_effective_policy, p_sticky,
                     if i_timestep < horizon-1:
                         value_next = np.full(len(states), 0.0)
                         for next_state in range(len(states)):
-                            if next_state == i_state:
+                            if actions[next_state] == actions[i_state]:
                                 value_next[next_state] = (
                                     p_sticky *
                                     Q_values[next_state][i_action,
@@ -449,8 +504,8 @@ def self_control_cognitive_hierarchy(policy_full_levels, level, Lambda, states,
 
 def get_naive_policy(states, actions, horizon, discount_factor_reward,
                      discount_factor_cost, reward_func, cost_func,
-                     reward_func_last, cost_func_last, T, sticky=False,
-                     p_sticky=None):
+                     reward_func_last, cost_func_last, T, state_to_get=0,
+                     sticky=False, p_sticky=None):
 
     if sticky:
         V_full, policy_full, Q_values_full = (
@@ -465,7 +520,7 @@ def get_naive_policy(states, actions, horizon, discount_factor_reward,
                 discount_factor_cost, reward_func, cost_func, reward_func_last,
                 cost_func_last, T))
 
-    policy_state_0 = [policy_full[i][0] for i in range(horizon)]
+    policy_state_0 = [policy_full[i][state_to_get] for i in range(horizon)]
     policy_state_0 = np.array(policy_state_0)
     # actual policy followed by agent
     effective_naive_policy = []
@@ -480,8 +535,8 @@ def get_naive_policy(states, actions, horizon, discount_factor_reward,
 def get_policy_self_control_actions(
         level_no, Q_values_full_naive, effective_naive_policy, states, actions,
         horizon, discount_factor_reward, discount_factor_cost, reward_func,
-        cost_func, reward_func_last, cost_func_last, T, sticky=False,
-        p_sticky=None):
+        cost_func, reward_func_last, cost_func_last, T, state_to_get=0,
+        sticky=False, p_sticky=None):
 
     Q_diff_levels_state_0 = []
     policy_levels_state_0 = []
@@ -490,10 +545,10 @@ def get_policy_self_control_actions(
     Q_diff_naive = []
     for t in range(horizon):
         Q_diff_naive.append(np.diff(
-            Q_values_full_naive[horizon-1-t][0][:, t])[0])
+            Q_values_full_naive[horizon-1-t][state_to_get][:, t])[0])
 
     Q_diff_levels_state_0.append(Q_diff_naive)
-    policy_levels_state_0.append(effective_naive_policy[0])
+    policy_levels_state_0.append(effective_naive_policy[state_to_get])
 
     effective_policy_prev_level = effective_naive_policy
     policy_full_levels.append(effective_policy_prev_level)
@@ -517,13 +572,14 @@ def get_policy_self_control_actions(
         effective_policy_prev_level = np.full((len(states), horizon), 100)
         Q_diff = []  # diff only for state=0
         for t in range(horizon):
-            Q_diff.append(np.diff(Q_current_level[horizon-1-t][0][:, t])[0])
+            Q_diff.append(np.diff(
+                Q_current_level[horizon-1-t][state_to_get][:, t])[0])
             for state in states:
                 effective_policy_prev_level[state, horizon-1-t] = np.argmax(
                     Q_current_level[t][state][:, horizon-1-t])
 
         Q_diff_levels_state_0.append(Q_diff)
-        policy_levels_state_0.append(effective_policy_prev_level[0])
+        policy_levels_state_0.append(effective_policy_prev_level[state_to_get])
         policy_full_levels.append(effective_policy_prev_level)
 
     return Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels
@@ -532,7 +588,8 @@ def get_policy_self_control_actions(
 def get_policy_self_control_cog_hierarchy(
         level_no, Q_values_full_naive, effective_naive_policy, states, actions,
         horizon, discount_factor_reward, discount_factor_cost, reward_func,
-        cost_func, reward_func_last, cost_func_last, T, Lambda):
+        cost_func, reward_func_last, cost_func_last, T, Lambda,
+        state_to_get=0):
 
     Q_diff_levels_state_0 = []
     policy_levels_state_0 = []
@@ -541,10 +598,10 @@ def get_policy_self_control_cog_hierarchy(
     Q_diff_naive = []
     for t in range(horizon):
         Q_diff_naive.append(np.diff(
-            Q_values_full_naive[horizon-1-t][0][:, t])[0])
+            Q_values_full_naive[horizon-1-t][state_to_get][:, t])[0])
 
     Q_diff_levels_state_0.append(Q_diff_naive)
-    policy_levels_state_0.append(effective_naive_policy[0])
+    policy_levels_state_0.append(effective_naive_policy[state_to_get])
 
     policy_full_levels.append(effective_naive_policy)
 
@@ -560,13 +617,14 @@ def get_policy_self_control_cog_hierarchy(
         effective_policy = np.full((len(states), horizon), 100)
         Q_diff = []  # diff only for state=0
         for t in range(horizon):
-            Q_diff.append(np.diff(Q_current_level[horizon-1-t][0][:, t])[0])
+            Q_diff.append(np.diff(
+                Q_current_level[horizon-1-t][state_to_get][:, t])[0])
             for state in states:
                 effective_policy[state, horizon-1-t] = np.argmax(
                     Q_current_level[t][state][:, horizon-1-t])
 
         Q_diff_levels_state_0.append(Q_diff)
-        policy_levels_state_0.append(effective_policy[0])
+        policy_levels_state_0.append(effective_policy[state_to_get])
         policy_full_levels.append(effective_policy)
 
     return Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels
@@ -687,24 +745,65 @@ if __name__ == 'main':
 
     LAMBDA = 0.5  # poisson hierarchy distribution mean
 
-    # %% inconsistent policy with different discounts
-
     reward_func, cost_func, reward_func_last, cost_func_last = (
         get_reward_functions(STATES, REWARD_DO, EFFORT_DO, REWARD_COMPLETED,
                              COST_COMPLETED))
 
     T = get_transition_prob(STATES, EFFICACY)
 
+    # %% exceptions
+
+    p_exception = 0.2  # probability of exception occurring
+    # states of markov chain
+    N_INTERMEDIATE_STATES = 0
+    # intermediate + initial and finished states (2)
+    STATES = np.arange(4 + N_INTERMEDIATE_STATES*2)
+
+    # actions available in each state
+    ACTIONS = np.full(len(STATES), np.nan, dtype=object)
+    # actions for normal and exception states (0-1 units completed)
+    ACTIONS[0] = ['shirk', 'work']
+    ACTIONS[1] = ['shirk']
+    ACTIONS[2] = ['shirk', 'work']
+    ACTIONS[3] = ['shirk']
+
+    HORIZON = 6  # deadline
+    DISCOUNT_FACTOR_REWARD = 0.7  # discounting factor for rewards
+    DISCOUNT_FACTOR_COST = 0.6  # discounting factor for costs
+    DISCOUNT_FACTOR_COMMON = 0.8  # common d iscount factor for both
+    EFFICACY = 0.8  # self-efficacy (probability of progress on working)
+
+    # utilities :
+    REWARD_DO_NORMAL = 2.0
+    EFFORT_DO_NORMAL = -1.3
+    REWARD_DO_EXCEPTION = 2.0
+    EFFORT_DO_EXCEPTION = -1.7
+    # no delayed rewards:
+    REWARD_COMPLETED = 0.0
+    COST_COMPLETED = -0.0
+
+    reward_func, cost_func, reward_func_last, cost_func_last = (
+        get_reward_functions_exception(
+            STATES, REWARD_DO_NORMAL, EFFORT_DO_NORMAL, REWARD_DO_EXCEPTION,
+            EFFORT_DO_EXCEPTION, REWARD_COMPLETED, COST_COMPLETED))
+
+    T = get_transition_prob_exception(STATES, EFFICACY, p_exception)
+
+    # %% inconsistent policy with different discounts
+
+    state_to_get = 0
+
     policy_state_0, effective_naive_policy, Q_values_full_naive, V_full_naive = get_naive_policy(
         STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST,
-        reward_func, cost_func, reward_func_last, cost_func_last, T)
+        reward_func, cost_func, reward_func_last, cost_func_last, T,
+        state_to_get=state_to_get)
 
     plot_heatmap(policy_state_0, cmap=sns.color_palette('husl', 2),
                  ylabel='horizon', xlabel='timestep', vmin=0, vmax=1)
     plt.title('Naive policy')
 
-    # Q-diff only for state 0
-    Q_values = [Q_values_full_naive[i][0] for i in range(HORIZON)]
+    # Q-diff only for a given state
+    Q_values = [Q_values_full_naive[i][state_to_get] for i in range(HORIZON)]
     Q_diff_full = [a[1]-a[0] for a in Q_values]
     Q_diff_full = np.array(Q_diff_full)
     plot_Q_value_diff(Q_diff_full, cmap='coolwarm',
@@ -717,7 +816,47 @@ if __name__ == 'main':
     Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels = get_policy_self_control_actions(
         level_no, Q_values_full_naive, effective_naive_policy, STATES, ACTIONS,
         HORIZON, DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func,
-        cost_func, reward_func_last, cost_func_last, T)
+        cost_func, reward_func_last, cost_func_last, T,
+        state_to_get=state_to_get)
+
+    plot_heatmap(np.array(policy_levels_state_0),
+                 cmap=sns.color_palette('husl', 2),
+                 ylabel='level k effective policy', xlabel='agent at timestep')
+
+    plot_Q_value_diff(np.array(Q_diff_levels_state_0), 'coolwarm',
+                      ylabel='level k diff in Q-values \n (WORK-SHIRK)',
+                      xlabel='agent at timestep', vmin=-0.65, vmax=0.65)
+
+    # %% stickiness
+    # what if we had 1 step stickiness?
+
+    P_STICKY = 0.9
+    state_to_get = 2
+
+    policy_state_0_h, effective_naive_policy_h, Q_values_full_naive_h, V_full_naive_h = get_naive_policy(
+        STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST,
+        reward_func, cost_func, reward_func_last, cost_func_last, T,
+        state_to_get=state_to_get, sticky=True, p_sticky=P_STICKY)
+
+    plot_heatmap(policy_state_0_h, cmap=sns.color_palette('husl', 2),
+                 ylabel='horizon', xlabel='timestep', vmin=0, vmax=1)
+    plt.title('Naive policy')
+
+    # Q-diff only for state 0
+    Q_values = [Q_values_full_naive_h[i][state_to_get] for i in range(HORIZON)]
+    Q_diff_full = [a[1]-a[0] for a in Q_values]
+    Q_diff_full = np.array(Q_diff_full)
+    plot_Q_value_diff(Q_diff_full, cmap='coolwarm',
+                      ylabel='horizon', xlabel='timestep',
+                      title='diff in Q_values (WORK-SHIRK)',
+                      vmin=-0.7, vmax=0.7)
+
+    level_no = HORIZON-1
+    Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels = get_policy_self_control_actions(
+        level_no, Q_values_full_naive_h, effective_naive_policy_h, STATES, ACTIONS,
+        HORIZON, DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func,
+        cost_func, reward_func_last, cost_func_last, T,
+        state_to_get=state_to_get, sticky=True, p_sticky=P_STICKY)
 
     plot_heatmap(np.array(policy_levels_state_0),
                  cmap=sns.color_palette('husl', 2),
@@ -988,40 +1127,4 @@ if __name__ == 'main':
     fig2.legend(title=r'$\gamma_r$', bbox_to_anchor=(1.15, 0.75))
     fig3.legend(title=r'$\gamma_r$', bbox_to_anchor=(1.15, 0.75))
     fig4.legend(title=r'$\gamma_r$', bbox_to_anchor=(1.15, 0.75))
-
-    # %% stickiness
-    # what if we had 1 step stickiness?
-
-    P_STICKY = 0.7
-    policy_state_0_h, effective_naive_policy_h, Q_values_full_naive_h, V_full_naive_h = get_naive_policy(
-        STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST,
-        reward_func, cost_func, reward_func_last, cost_func_last, T,
-        sticky=True, p_sticky=P_STICKY)
-
-    plot_heatmap(policy_state_0_h, cmap=sns.color_palette('husl', 2),
-                 ylabel='horizon', xlabel='timestep', vmin=0, vmax=1)
-    plt.title('Naive policy')
-
-    # Q-diff only for state 0
-    Q_values = [Q_values_full_naive_h[i][0] for i in range(HORIZON)]
-    Q_diff_full = [a[1]-a[0] for a in Q_values]
-    Q_diff_full = np.array(Q_diff_full)
-    plot_Q_value_diff(Q_diff_full, cmap='coolwarm',
-                      ylabel='horizon', xlabel='timestep',
-                      title='diff in Q_values (WORK-SHIRK)',
-                      vmin=-0.7, vmax=0.7)
-
-    level_no = HORIZON-1
-    Q_diff_levels_state_0, policy_levels_state_0, policy_full_levels = get_policy_self_control_actions(
-        level_no, Q_values_full_naive_h, effective_naive_policy_h, STATES, ACTIONS,
-        HORIZON, DISCOUNT_FACTOR_REWARD, DISCOUNT_FACTOR_COST, reward_func,
-        cost_func, reward_func_last, cost_func_last, T, sticky=True,
-        p_sticky=P_STICKY)
-
-    plot_heatmap(np.array(policy_levels_state_0),
-                 cmap=sns.color_palette('husl', 2),
-                 ylabel='level k effective policy', xlabel='agent at timestep')
-
-    plot_Q_value_diff(np.array(Q_diff_levels_state_0), 'coolwarm',
-                      ylabel='level k diff in Q-values \n (WORK-SHIRK)',
-                      xlabel='agent at timestep', vmin=-0.65, vmax=0.65)
+    plt.show()

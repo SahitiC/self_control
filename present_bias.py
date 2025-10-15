@@ -229,7 +229,7 @@ def self_control_with_actions_habit(prev_level_effective_policy, states,
 
 # %% health rewards at deadline
 
-states = np.arange(2)
+states = np.arange(3)
 
 # actions available in each state
 actions = np.full(len(states), np.nan, dtype=object)
@@ -238,14 +238,14 @@ actions[:-1] = [['tempt', 'resist']
                 for i in range(len(states)-1)]
 actions[-1] = ['final']  # actions for final state
 
-horizon = 4  # deadline
-discount_beta = 0.5  # discounting factor for rewards
+horizon = 3  # deadline
+discount_beta = 0.7  # discounting factor for rewards
 discount_delta = 0.8  # discounting factor for costs
 
 # utilities :
 effort_resist = 0
 reward_tempt = 0.5
-reward_resist = 2.0
+reward_resist = 1.5
 
 # get reward matrix
 reward_func = []
@@ -254,7 +254,7 @@ for i in range(len(states)-1):
                         np.full(len(states), effort_resist)])
 reward_func.append([np.full(len(states), 0.0)])  # rewards for completed
 # reward_func_last = [reward_resist*i for i in range(len(states)-1, -1, -1)]
-reward_func_last = [2.0, 1.0, 0.0]
+reward_func_last = [reward_resist, 0.0, 0.0]
 
 # get transition function
 T = []
@@ -288,7 +288,7 @@ discount_delta = 0.8  # discounting factor for costs
 
 # utilities :
 effort_resist = 0
-reward_tempt = 0.5
+reward_tempt = 0.7
 reward_resist = 0.8
 
 # get reward matrix
@@ -314,6 +314,57 @@ T.append([np.array([1, 0]),
 T.append([np.array([1, 0]),
           np.array([0, 1])])
 
+# %% exceptions
+p_exception = 0.1  # prob of exception happening
+# 4 states:
+# 0 (no health reward pending), 1 (health reward pending)
+# 2, 3 (exception happened, (no) health reward pending)
+states = np.arange(4)
+
+# actions available in each state
+actions = np.full(len(states), np.nan, dtype=object)
+actions = [['tempt', 'resist']
+           for i in range(len(states))]
+
+horizon = 20  # deadline
+discount_beta = 0.7  # discounting factor for rewards
+discount_delta = 0.8  # discounting factor for costs
+
+# utilities:
+effort_resist = 0
+reward_tempt_normal = 0.5
+reward_resist_normal = 0.8
+reward_tempt_exception = 0.65
+reward_resist_exception = 0.8
+
+# get reward matrix
+reward_func = []
+# reward for state 0, for tempt, resist
+reward_func.append([np.full(len(states), reward_tempt_normal),
+                    np.full(len(states), effort_resist)])
+# reward for state 1, for tempt, resist
+reward_func.append(
+    [np.full(len(states), reward_resist_normal + reward_tempt_normal),
+     np.full(len(states), reward_resist_normal + effort_resist)])
+# reward for state 2, for tempt, resist
+reward_func.append([np.full(len(states), reward_tempt_exception),
+                    np.full(len(states), effort_resist)])
+# reward for state 3, for tempt, resist
+reward_func.append(
+    [np.full(len(states), reward_resist_exception + reward_tempt_exception),
+     np.full(len(states), reward_resist_exception + effort_resist)])
+
+reward_func_last = np.array([0.0, reward_resist_normal,
+                             0.0, reward_resist_exception])
+
+# transition function for all states:
+# with prob 1-p_expception, tempt -> state 0, if resist -> state 1
+# prob p_exception of exception, then tempt -> state 2, resist -> state 3
+T = []
+for state in range(len(states)):
+    T.append([np.array([1-p_exception, 0, p_exception, 0]),
+              np.array([0, 1-p_exception, 0, p_exception])])
+
 # %%
 Q_diffs_state_0 = []
 policys_state_0 = []
@@ -322,7 +373,7 @@ V_opt_full, policy_full, Q_values_full = mdp_algms.find_optimal_policy_beta_delt
     states, actions, horizon, discount_beta, discount_delta,
     reward_func, reward_func_last, T)
 
-state_to_plot = 0
+state_to_plot = 3
 
 policy_state_0 = [policy_full[i][state_to_plot] for i in range(horizon)]
 policy_state_0 = np.array(policy_state_0)
@@ -422,13 +473,13 @@ plt.show()
 # %%
 Q_diffs_state_0 = []
 policys_state_0 = []
-P_STICKY = 0.9
+P_STICKY = 0.8
 
 V_opt_full, policy_full, Q_values_full = find_optimal_policy_beta_delta_habit(
     states, actions, horizon, discount_beta, discount_delta,
     reward_func, reward_func_last, T, P_STICKY)
 
-state_to_plot = 0
+state_to_plot = 3
 
 policy_state_0 = [policy_full[i][state_to_plot] for i in range(horizon)]
 policy_state_0 = np.array(policy_state_0)
@@ -629,3 +680,5 @@ ax.tick_params()
 colorbar = ax.collections[0].colorbar
 colorbar.set_ticks([0.4, 1, 1.6])
 colorbar.set_ticklabels(['DEFECT', 'PRECOMMIT', 'RESIST'])
+
+plt.show()
