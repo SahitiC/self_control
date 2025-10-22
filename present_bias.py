@@ -315,7 +315,7 @@ T.append([np.array([1, 0]),
           np.array([0, 1])])
 
 # %% exceptions
-p_exception = 0.1  # prob of exception happening
+p_exception = 0.02  # prob of exception happening
 # 4 states:
 # 0 (no health reward pending), 1 (health reward pending)
 # 2, 3 (exception happened, (no) health reward pending)
@@ -473,13 +473,13 @@ plt.show()
 # %%
 Q_diffs_state_0 = []
 policys_state_0 = []
-P_STICKY = 0.8
+P_STICKY = 0.9
 
 V_opt_full, policy_full, Q_values_full = find_optimal_policy_beta_delta_habit(
     states, actions, horizon, discount_beta, discount_delta,
     reward_func, reward_func_last, T, P_STICKY)
 
-state_to_plot = 3
+state_to_plot = 2
 
 policy_state_0 = [policy_full[i][state_to_plot] for i in range(horizon)]
 policy_state_0 = np.array(policy_state_0)
