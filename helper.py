@@ -37,8 +37,9 @@ def plot_Q_value_diff(Q_diff, cmap, ylabel, xlabel, title='', vmin=-0.5,
 
 
 def get_effective_policy(states, policy_full, horizon):
-    effective_naive_policy = []
+    effective_policy = []
     for state in states:
-        effective_naive_policy.append(np.array(
+        effective_policy.append(np.array(
             [policy_full[horizon-1-i][state][i] for i in range(horizon)]))
-    effective_naive_policy = np.array(effective_naive_policy, dtype=int)
+    effective_policy = np.array(effective_policy, dtype=int)
+    return effective_policy

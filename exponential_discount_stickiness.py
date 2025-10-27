@@ -1,6 +1,3 @@
-"""
-Demonstration of planning with habits without inconsistencies
-"""
 # %%
 import numpy as np
 import matplotlib.pyplot as plt
@@ -30,8 +27,9 @@ def get_reward_functions(states, reward_do, effort_do, reward_completed,
     return reward_func, reward_func_last
 
 
-def plan_with_habits(p_sticky, states, actions, horizon, discount_factor,
-                     reward_func, reward_func_last, T):
+def plan_with_habits_one_step(
+        p_sticky, states, actions, horizon, discount_factor, reward_func,
+        reward_func_last, T):
     """Derive optimal higher level policy taking stickiness into account."""
 
     # arrays for optimal values, policy, Q-values
@@ -88,6 +86,69 @@ def plan_with_habits(p_sticky, states, actions, horizon, discount_factor,
 
     return V_opt, policy_opt, Q_values
 
+
+def plan_with_habit(
+        p_sticky, alpha, states, actions, horizon, discount_factor,
+        reward_func, reward_func_last, T):
+    """Derive optimal higher level policy taking stickiness into account.
+    Current acions affect all future actions but effect decays with distance 
+    by exponetnial factor alpha; alpha=0 recovers one step stickiness"""
+
+    # arrays for optimal values, policy, Q-values
+    V_opt = np.full((len(states), horizon+1), np.nan)
+    policy_opt = np.full((len(states), horizon), 100)
+    Q_values = np.full(len(states), np.nan, dtype=object)
+
+    for i_state, state in enumerate(states):
+
+        # V_opt for last time-step
+        V_opt[i_state, -1] = reward_func_last[i_state]
+        # arrays to store Q-values for each action in each state
+        Q_values[i_state] = np.full((len(actions[i_state]), horizon), np.nan)
+
+    # backward induction to derive optimal policy
+    for i_timestep in range(horizon-1, -1, -1):
+
+        for i_state, state in enumerate(states):
+
+            Q = np.full(len(actions[i_state]), np.nan)
+
+            for i_action, action in enumerate(actions[i_state]):
+
+                # value of next state (if same as current state) in the next
+                # timestep is: p * value of current action in next state +
+                # (1-p) * value of optimal action in next state
+                if i_timestep < horizon-1:
+                    value_next = np.full(len(states), 0.0)
+                    for next_state in range(len(states)):
+                        if next_state == i_state:
+                            opt_action = policy_opt[next_state, i_timestep+1]
+                            value_next[next_state] = (
+                                p_sticky *
+                                Q_values[next_state][i_action, i_timestep+1]
+                                + (1-p_sticky) *
+                                Q_values[next_state][opt_action, i_timestep+1])
+                        else:
+                            value_next[next_state] = V_opt[next_state,
+                                                           i_timestep+1]
+
+                else:
+                    value_next = V_opt[:, i_timestep+1]
+
+                # q-value for each action (bellman equation)
+                Q[i_action] = (T[i_state][i_action]
+                               @ reward_func[i_state][i_action].T
+                               + discount_factor * (T[i_state][i_action]
+                                                    @ value_next))
+
+            # find optimal action (which gives max q-value)
+            V_opt[i_state, i_timestep] = np.max(Q)
+            policy_opt[i_state, i_timestep] = np.argmax(Q)
+            Q_values[i_state][:, i_timestep] = Q
+
+    return V_opt, policy_opt, Q_values
+
+
 # %%
 
 
@@ -129,7 +190,7 @@ V_opt, policy_opt, Q_values = mdp_algms.find_optimal_policy_prob_rewards(
 
 # level 0: take habits into account
 p_sticky = 0.6
-V_opt_habit, policy_opt_habit, Q_values_habit = plan_with_habits(
+V_opt_habit, policy_opt_habit, Q_values_habit = plan_with_habits_one_step(
     p_sticky, STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
     reward_func_last, T)
 
