@@ -30,7 +30,9 @@ def get_reward_functions(states, reward_do, effort_do, reward_completed,
 def plan_with_habits_one_step(
         p_sticky, states, actions, horizon, discount_factor, reward_func,
         reward_func_last, T):
-    """Derive optimal higher level policy taking stickiness into account."""
+    """Derive optimal higher level policy taking stickiness into account.
+    Stickiness is one-step: current action affects next action with probability
+    p_sticky."""
 
     # arrays for optimal values, policy, Q-values
     V_opt = np.full((len(states), horizon+1), np.nan)
@@ -87,64 +89,88 @@ def plan_with_habits_one_step(
     return V_opt, policy_opt, Q_values
 
 
+def update_memory_habit(alpha, s, X_norm, W, i_action, action):
+
+    if s == 0:
+        W_next = alpha * W + 1.0
+        # assuming action is 0/1 and 1 is "cooperate", i.e. work or resist:
+        X_next = (alpha * W * X_norm + action) / W_next
+    else:
+        X_next = X_norm
+        W_next = W
+
+    return X_next, W_next
+
+
 def plan_with_habit(
-        p, alpha, states, actions, horizon, discount_factor,
+        p, alpha, d_step, states, actions, horizon, discount_factor,
         reward_func, reward_func_last, T):
     """Derive optimal higher level policy taking stickiness into account.
-    Current acions affect all future actions but effect decays with distance 
-    by exponetnial factor alpha; alpha=0 recovers one step stickiness"""
+    Current acions affect all future actions but effect decays with time 
+    by exponetnial factor alpha; alpha=0 corresponds to one step stickiness"""
+
+    # probability of cooperating
+    X_norm = np.arange(0, 1+d_step, d_step)
+    # total weight
+    W = np.arange(0, 1+d_step, d_step)
 
     # arrays for optimal values, policy, Q-values
-    V_opt = np.full((len(states), horizon+1), np.nan)
-    policy_opt = np.full((len(states), horizon), 100)
-    Q_values = np.full(len(states), np.nan, dtype=object)
+    V_opt = np.full((len(X_norm), len(W), len(states), horizon+1), np.nan)
+    policy_opt = np.full((len(X_norm), len(W), len(states), horizon), 100)
+    Q_values = np.full((len(X_norm), len(W), len(states)),
+                       np.nan, dtype=object)
 
     for i_state, state in enumerate(states):
 
         # V_opt for last time-step
-        V_opt[i_state, -1] = reward_func_last[i_state]
+        V_opt[:, i_state, -1] = reward_func_last[i_state]
         # arrays to store Q-values for each action in each state
-        Q_values[i_state] = np.full((len(actions[i_state]), horizon), np.nan)
+        Q_values[:, i_state] = np.full(
+            (len(actions[i_state]), horizon), np.nan)
 
     # backward induction to derive optimal policy
     for i_timestep in range(horizon-1, -1, -1):
 
-        for i_state, state in enumerate(states):
+        for i_x, x in enumerate(X_norm):
+            for i_state, state in enumerate(states):
 
-            Q = np.full(len(actions[i_state]), np.nan)
+                Q = np.full(len(actions[i_state]), np.nan)
 
-            for i_action, action in enumerate(actions[i_state]):
+                for i_action, action in enumerate(actions[i_state]):
 
-                # value of next state (if same as current state) in the next
-                # timestep is: p * value of current action in next state +
-                # (1-p) * value of optimal action in next state
-                if i_timestep < horizon-1:
-                    value_next = np.full(len(states), 0.0)
-                    for next_state in range(len(states)):
-                        if next_state == i_state:
-                            opt_action = policy_opt[next_state, i_timestep+1]
-                            value_next[next_state] = (
-                                p_sticky *
-                                Q_values[next_state][i_action, i_timestep+1]
-                                + (1-p_sticky) *
-                                Q_values[next_state][opt_action, i_timestep+1])
-                        else:
-                            value_next[next_state] = V_opt[next_state,
-                                                           i_timestep+1]
+                    if i_timestep < horizon-1:
+                        value_next = np.full(len(X_norm), len(states), 0.0)
 
-                else:
-                    value_next = V_opt[:, i_timestep+1]
+                        for x_next in range(len(X_norm)):
+                            for next_state in range(len(states)):
 
-                # q-value for each action (bellman equation)
-                Q[i_action] = (T[i_state][i_action]
-                               @ reward_func[i_state][i_action].T
-                               + discount_factor * (T[i_state][i_action]
-                                                    @ value_next))
+                                opt_action = policy_opt[x_next,
+                                                        next_state,
+                                                        i_timestep+1]
+                                value_next[next_state] = (
+                                    p_sticky *
+                                    Q_values[next_state][i_action,
+                                                         i_timestep+1]
+                                    + (1-p_sticky) *
+                                    Q_values[next_state][opt_action,
+                                                         i_timestep+1])
 
-            # find optimal action (which gives max q-value)
-            V_opt[i_state, i_timestep] = np.max(Q)
-            policy_opt[i_state, i_timestep] = np.argmax(Q)
-            Q_values[i_state][:, i_timestep] = Q
+                                value_next[next_state] = V_opt[next_state,
+                                                               i_timestep+1]
+
+                    else:
+                        value_next = V_opt[:, :, i_timestep+1]
+
+                    # q-value for each action (bellman equation)
+                    Q[i_action] = (T[i_state][i_action]
+                                   @ reward_func[i_state][i_action].T
+                                   + discount_factor * (T[i_state][i_action]
+                                                        @ value_next))
+
+                # find optimal action (which gives max q-value)
+                V_opt[i_state, i_timestep] = np.max(Q)
+                policy_opt[i_state, i_timestep] = np.argmax(Q)
+                Q_values[i_state][:, i_timestep] = Q
 
     return V_opt, policy_opt, Q_values
 
@@ -162,7 +188,7 @@ ACTIONS = np.full(len(STATES), np.nan, dtype=object)
 # actions for all states but final:
 ACTIONS[:-1] = [['shirk', 'work']
                 for i in range(len(STATES)-1)]
-ACTIONS[-1] = ['shirk']  # actions for final state
+ACTIONS[-1] = ['done']  # actions for final state
 
 HORIZON = 3  # deadline
 DISCOUNT_FACTOR = 0.9  # common d iscount factor for both
