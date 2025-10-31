@@ -4,7 +4,6 @@ import helper
 import mdp_algms
 import self_control
 import numpy as np
-import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib as mpl
 mpl.rcParams['font.size'] = 14
@@ -42,22 +41,13 @@ if exception:
     REWARD_TEMPT_EXCEPTION = 0.65
     REWARD_RESIST_EXCEPTION = 0.8
 
-    # get reward matrix
-    reward_func = []
-    # reward for state 0, for tempt, resist
-    reward_func.append([np.full(len(STATES), REWARD_TEMPT_NORMAL),
-                        np.full(len(STATES), EFFORT_RESIST)])
-    # reward for state 1, for tempt, resist
-    reward_func.append(
-        [np.full(len(STATES), REWARD_RESIST_NORMAL + REWARD_TEMPT_NORMAL),
-         np.full(len(STATES), REWARD_RESIST_NORMAL + EFFORT_RESIST)])
-    # reward for state 2, for tempt, resist
-    reward_func.append([np.full(len(STATES), REWARD_TEMPT_EXCEPTION),
-                        np.full(len(STATES), EFFORT_RESIST)])
-    # reward for state 3, for tempt, resist
-    reward_func.append([
-        np.full(len(STATES), REWARD_RESIST_EXCEPTION + REWARD_TEMPT_EXCEPTION),
-        np.full(len(STATES), REWARD_RESIST_EXCEPTION + EFFORT_RESIST)])
+    reward_func1, _ = task_structure.rewards_cake(
+        STATES, REWARD_TEMPT_NORMAL, EFFORT_RESIST, REWARD_RESIST_NORMAL)
+
+    reward_func2, _ = task_structure.rewards_cake(
+        STATES, REWARD_TEMPT_EXCEPTION, EFFORT_RESIST, REWARD_RESIST_EXCEPTION)
+
+    reward_func = reward_func1 + reward_func2
 
     reward_func_last = np.array([0.0, REWARD_RESIST_NORMAL,
                                  0.0, REWARD_RESIST_EXCEPTION])
@@ -91,28 +81,11 @@ else:
     REWARD_TEMPT = 0.5
     REWARD_RESIST = 0.8
 
-    # get reward matrix
-    reward_func = []
-    # reward for state 0, for tempt, resist
-    # if tempt -> r_tempt and if resist -> e_resist
-    # (doesn't matter what the next state is ):
-    reward_func.append([np.full(len(STATES), REWARD_TEMPT),
-                        np.full(len(STATES), EFFORT_RESIST)])
-    # reward for state 1, for tempt, resist
-    # if tempt -> r_tempt & if resist -> e_resist + r_resist from last timestep
-    # in both cases (doesn't matter what the next state is  )
-    reward_func.append([np.full(len(STATES), REWARD_RESIST + REWARD_TEMPT),
-                        np.full(len(STATES), REWARD_RESIST + EFFORT_RESIST)])
-    reward_func_last = np.array([0.0, REWARD_RESIST])
+    reward_func, reward_func_last = task_structure.rewards_cake(
+        STATES, REWARD_TEMPT, EFFORT_RESIST, REWARD_RESIST)
 
     # get transition function
-    T = []
-    # transition for state 0, if tempt -> state 0, if resist -> state 1
-    T.append([np.array([1, 0]),
-              np.array([0, 1])])
-    # transition for state 1, if tempt -> state 0, if resist -> state 1
-    T.append([np.array([1, 0]),
-              np.array([0, 1])])
+    T = task_structure.transitions_cake()
 
 # %% naive policy
 V_full_naive, policy_full_naive, Q_values_full_naive = (
@@ -156,7 +129,7 @@ helper.plot_Q_value_diff(np.array(Q_diff_levels_state), 'coolwarm',
                          vmin=-0.65, vmax=0.65)
 
 # %% plan with stickiness
-P_STICKY = 0.9
+P_STICKY = 0.6
 Q_diff_levels_state, policy_levels_state, policy_full_levels = (
     self_control.get_all_levels_self_control(
         level_no, Q_values_full_naive, effective_naive_policy, STATES, ACTIONS,

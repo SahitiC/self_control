@@ -1,6 +1,6 @@
 import numpy as np
 
-# %% for procrastination case with immediate rewards and efforts
+# %% for procrastination case with immediate and delayed rewards and efforts
 
 
 def rewards_procrastination_common(states, reward_do, effort_do,
@@ -55,4 +55,38 @@ def transitions_procrastination(states, efficacy):
 
     return T
 
-# %%
+# %% cake-eating with immediate and delayed rewards
+
+
+def rewards_cake(states, reward_tempt, effort_resist,
+                 reward_resist):
+
+    # get reward matrix
+    reward_func = []
+    # reward for state 0, for tempt, resist
+    # if tempt -> r_tempt and if resist -> e_resist
+    # (doesn't matter what the next state is ):
+    reward_func.append([np.full(len(states), reward_tempt),
+                        np.full(len(states), effort_resist)])
+    # reward for state 1, for tempt, resist
+    # if tempt -> r_tempt & if resist -> e_resist + r_resist from last timestep
+    # in both cases (doesn't matter what the next state is  )
+    reward_func.append([np.full(len(states), reward_resist + reward_tempt),
+                        np.full(len(states), reward_resist + effort_resist)])
+    reward_func_last = np.array([0.0, reward_resist])
+
+    return reward_func, reward_func_last
+
+
+def transitions_cake():
+
+    # get transition function
+    T = []
+    # transition for state 0, if tempt -> state 0, if resist -> state 1
+    T.append([np.array([1, 0]),
+              np.array([0, 1])])
+    # transition for state 1, if tempt -> state 0, if resist -> state 1
+    T.append([np.array([1, 0]),
+              np.array([0, 1])])
+
+    return T
