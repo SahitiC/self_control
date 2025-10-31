@@ -88,7 +88,7 @@ def plan_with_habits_one_step(
 
 
 def plan_with_habit(
-        p_sticky, alpha, states, actions, horizon, discount_factor,
+        p, alpha, states, actions, horizon, discount_factor,
         reward_func, reward_func_last, T):
     """Derive optimal higher level policy taking stickiness into account.
     Current acions affect all future actions but effect decays with distance 

@@ -105,3 +105,5 @@ helper.plot_heatmap(np.array(policy_levels_state),
 helper.plot_Q_value_diff(np.array(Q_diff_levels_state), 'coolwarm',
                          ylabel='level k diff in Q-values \n (WORK-SHIRK)',
                          xlabel='agent at timestep', vmin=-0.65, vmax=0.65)
+
+# %%
