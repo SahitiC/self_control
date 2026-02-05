@@ -89,94 +89,80 @@ def plan_with_habits_one_step(
     return V_opt, policy_opt, Q_values
 
 
-def update_memory_habit(alpha, s, X_norm, W, i_action, action):
-
-    if s == 0:
-        W_next = alpha * W + 1.0
-        # assuming action is 0/1 and 1 is "cooperate", i.e. work or resist:
-        X_next = (alpha * W * X_norm + action) / W_next
+def update_memory_habit(alpha, s, x, W, action, action_num):
+    if action_num > 1:
+        W_next = alpha * W + 1
+        # assuming action is 0/1 and 1 is "cooperate" (work or resist):
+        x_next = (alpha * W * x + action) / W_next
     else:
-        X_next = X_norm
-        W_next = W
-
-    return X_next, W_next
+        x_next = x
+    return x_next
 
 
-def plan_with_habit(
+def plan_with_habits(
         p, alpha, d_step, states, actions, horizon, discount_factor,
         reward_func, reward_func_last, T):
     """Derive optimal higher level policy taking stickiness into account.
-    Current acions affect all future actions but effect decays with time 
-    by exponetnial factor alpha; alpha=0 corresponds to one step stickiness"""
+    Current actions affect all future actions but effect decays with time
+    by exponential factor alpha; alpha=0 corresponds to one step stickiness"""
 
     # probability of cooperating
     X_norm = np.arange(0, 1+d_step, d_step)
-    # total weight
-    W = np.arange(0, 1+d_step, d_step)
 
     # arrays for optimal values, policy, Q-values
-    V_opt = np.full((len(X_norm), len(W), len(states), horizon+1), np.nan)
-    policy_opt = np.full((len(X_norm), len(W), len(states), horizon), 100)
-    Q_values = np.full((len(X_norm), len(W), len(states)),
-                       np.nan, dtype=object)
+    V_opt = np.full((len(X_norm), len(states), horizon+1), np.nan)
+    policy_opt = np.full((len(X_norm), len(states), horizon), 100)
+    Q_values = np.full((len(X_norm), len(states)), np.nan, dtype=object)
 
     for i_state, state in enumerate(states):
-
         # V_opt for last time-step
         V_opt[:, i_state, -1] = reward_func_last[i_state]
         # arrays to store Q-values for each action in each state
-        Q_values[:, i_state] = np.full(
-            (len(actions[i_state]), horizon), np.nan)
+        for i in range(len(X_norm)):
+            Q_values[i, i_state] = np.full(
+                (len(actions[i_state]), horizon), np.nan)
 
     # backward induction to derive optimal policy
     for i_timestep in range(horizon-1, -1, -1):
+        # total weight is completely determined by time step
+        W = (1 - alpha**i_timestep) / (1 - alpha)
 
         for i_x, x in enumerate(X_norm):
-            for i_state, state in enumerate(states):
 
+            for i_state, state in enumerate(states):
                 Q = np.full(len(actions[i_state]), np.nan)
 
                 for i_action, action in enumerate(actions[i_state]):
 
-                    if i_timestep < horizon-1:
-                        value_next = np.full(len(X_norm), len(states), 0.0)
+                    if len(actions[i_state]) > 1:
+                        # probability of [defect, cooperate]
+                        p_exec = p * np.array([1 - x, x])
+                        p_exec[i_action] += (1 - p)
+                    else:  # here only one action
+                        p_exec = [1.0]
 
-                        for x_next in range(len(X_norm)):
-                            for next_state in range(len(states)):
+                    q = 0
+                    for a_exec in range(len(actions[i_state])):
+                        x_next = update_memory_habit(
+                            alpha, state, x, W, a_exec, len(actions[i_state]))
+                        i_x_next = np.argmin(np.abs(X_norm - x_next))
 
-                                opt_action = policy_opt[x_next,
-                                                        next_state,
-                                                        i_timestep+1]
-                                value_next[next_state] = (
-                                    p_sticky *
-                                    Q_values[next_state][i_action,
-                                                         i_timestep+1]
-                                    + (1-p_sticky) *
-                                    Q_values[next_state][opt_action,
-                                                         i_timestep+1])
+                        q += p_exec[a_exec] * (
+                            T[i_state][a_exec] @ reward_func[i_state][a_exec].T
+                            + discount_factor * (
+                                T[i_state][a_exec] @
+                                V_opt[i_x_next, :, i_timestep+1]))
 
-                                value_next[next_state] = V_opt[next_state,
-                                                               i_timestep+1]
+                    Q[i_action] = q
 
-                    else:
-                        value_next = V_opt[:, :, i_timestep+1]
-
-                    # q-value for each action (bellman equation)
-                    Q[i_action] = (T[i_state][i_action]
-                                   @ reward_func[i_state][i_action].T
-                                   + discount_factor * (T[i_state][i_action]
-                                                        @ value_next))
-
-                # find optimal action (which gives max q-value)
-                V_opt[i_state, i_timestep] = np.max(Q)
-                policy_opt[i_state, i_timestep] = np.argmax(Q)
-                Q_values[i_state][:, i_timestep] = Q
+                V_opt[i_x, i_state, i_timestep] = np.max(Q)
+                policy_opt[i_x, i_state, i_timestep] = np.argmax(Q)
+                Q_values[i_x, i_state][:, i_timestep] = Q
 
     return V_opt, policy_opt, Q_values
 
 
 # %%
-
 
 # states of markov chain
 N_INTERMEDIATE_STATES = 0
@@ -197,17 +183,16 @@ EFFICACY = 1.0  # self-efficacy (probability of progress on working)
 # utilities :
 REWARD_DO = 0.0
 EFFORT_DO = -1.0
-# no delayed rewards:
+# delayed rewards:
 REWARD_COMPLETED = 2.0
 COST_NOT_COMPLETED = -0.0
-
 
 reward_func, reward_func_last = task_structure.rewards_procrastination_common(
     STATES, REWARD_DO, EFFORT_DO, REWARD_COMPLETED, COST_NOT_COMPLETED)
 
 T = task_structure.transitions_procrastination(STATES, EFFICACY)
 
-# %% policies
+# %% policies 1-step habit
 
 # level -1: play with environment
 V_opt, policy_opt, Q_values = mdp_algms.find_optimal_policy_prob_rewards(
@@ -216,9 +201,10 @@ V_opt, policy_opt, Q_values = mdp_algms.find_optimal_policy_prob_rewards(
 
 # level 0: take habits into account
 p_sticky = 0.6
-V_opt_habit, policy_opt_habit, Q_values_habit = plan_with_habits_one_step(
-    p_sticky, STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
-    reward_func_last, T)
+V_opt_habit_one, policy_opt_habit_one, Q_values_habit_one = (
+    plan_with_habits_one_step(
+        p_sticky, STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
+        reward_func_last, T))
 
 # %% vary params
 
@@ -234,10 +220,11 @@ policies.append(policy_opt[0])
 
 # level 0: take habits into account
 for p_sticky in [0.1, 0.3, 0.6, 0.9]:
-    V_opt_habit, policy_opt_habit, Q_values_habit = plan_with_habits(
-        p_sticky, STATES, ACTIONS, HORIZON, discount, reward_func,
-        reward_func_last, T)
-    policies.append(policy_opt_habit[0])
+    V_opt_habit_one, policy_opt_habit_one, Q_values_habit_one = (
+        plan_with_habits_one_step(
+            p_sticky, STATES, ACTIONS, HORIZON, discount, reward_func,
+            reward_func_last, T))
+    policies.append(policy_opt_habit_one[0])
 
 
 f, ax = plt.subplots(figsize=(5, 4), dpi=100)
@@ -253,5 +240,13 @@ colorbar.set_ticks([0.25, 0.75])
 colorbar.set_ticklabels(['SHIRK', 'WORK'])
 ax.set_yticklabels([0, 0.1, 0.3, 0.6, 0.9])
 plt.show()
+
+# %% policies exponential filtering habit
+p = 0.3
+alpha = 0
+dx = 0.01
+V_opt_habit, policy_opt_habit, Q_values_habit = plan_with_habits(
+    p, alpha, dx, STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
+    reward_func_last, T)
 
 # %%
