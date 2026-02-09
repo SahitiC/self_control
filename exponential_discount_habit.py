@@ -162,6 +162,45 @@ def plan_with_habits(
     return V_opt, policy_opt, Q_values
 
 
+def simulate_behavior_with_habit(
+        policy_opt_habit, T, alpha, dx, states, actions, horizon, plot=False):
+
+    # starting states:
+    x = 0.0
+    s = 0
+    X_norm = np.arange(0, 1+dx, dx)
+    actions_executed = []
+    state_trajectory = [s]
+    x_trajectory = [x]
+    q_trajectory = []
+    for t in range(horizon):
+        i_x = np.argmin(np.abs(X_norm - x))
+        action = policy_opt_habit[i_x, s, t]
+        actions_executed.append(action)
+        x = update_memory_habit(alpha, s, x, (1-alpha**t)/(1-alpha), action,
+                                len(actions[s]))
+        x_trajectory.append(x)
+        # transition to next state
+        s = np.random.choice(len(states), p=T[s][action])
+        state_trajectory.append(s)
+        q_trajectory.append(Q_values_habit[i_x][s][:, t])
+
+    if plot:
+        actions_executed = np.array(actions_executed)
+        state_trajectory = np.array(state_trajectory)
+        time = np.arange(horizon)
+        plt.plot(state_trajectory, label='states')
+        plt.scatter(time[actions_executed == 1],
+                    state_trajectory[:-1][actions_executed == 1],
+                    label='action=work',)
+        plt.plot(x_trajectory, label='habit strength (work)')
+        plt.xticks(np.arange(horizon+1))
+        plt.legend()
+        plt.show()
+
+    return actions_executed, state_trajectory, x_trajectory, q_trajectory
+
+
 # %%
 
 # states of markov chain
@@ -178,7 +217,7 @@ ACTIONS[-1] = ['done']  # actions for final state
 
 HORIZON = 5  # deadline
 DISCOUNT_FACTOR = 0.9  # common d iscount factor for both
-EFFICACY = 0.8  # self-efficacy (probability of progress on working)
+EFFICACY = 0.9  # self-efficacy (probability of progress on working)
 
 # utilities :
 REWARD_DO = 0.0
@@ -242,41 +281,65 @@ ax.set_yticklabels([0, 0.1, 0.3, 0.6, 0.9])
 plt.show()
 
 # %% policies exponential filtering habit
-<<<<<<< HEAD
-p = 0.5
-alpha = 0.0
-=======
 p = 0.3
 alpha = 0.5
->>>>>>> b21d33fc345dd12f9709a58ba42a16d5d02c22ca
 dx = 0.01
 V_opt_habit, policy_opt_habit, Q_values_habit = plan_with_habits(
     p, alpha, dx, STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
     reward_func_last, T)
 
 # simulate behavior with habit
-# starting states:
-x = 0.0
-s = 0
-X_norm = np.arange(0, 1+dx, dx)
-actions_executed = []
-state_trajectory = []
-x_trajectory = []
-for t in range(HORIZON):
-    i_x = np.argmin(np.abs(X_norm - x))
-    action = policy_opt_habit[i_x, s, t]
-    actions_executed.append(action)
-    x = update_memory_habit(alpha, s, x, (1-alpha**t)/(1-alpha), action,
-                            len(ACTIONS[s]))
-    x_trajectory.append(x)
-    # transition to next state
-    s = np.random.choice(len(STATES), p=T[s][action])
-    state_trajectory.append(s)
-plt.plot(state_trajectory, label='states')
-plt.plot(actions_executed, label='actions')
-plt.plot(x_trajectory, label='habit strength')
-plt.xticks(np.arange(HORIZON))
-plt.legend()
-plt.show()
+_, _, _, _ = (
+    simulate_behavior_with_habit(policy_opt_habit, T, alpha, dx, STATES,
+                                 ACTIONS, HORIZON, plot=True))
+
+# %% vary params
+
+for p in [0.0, 0.3, 0.6, 0.9]:
+    V_opt_habit, policy_opt_habit, Q_values_habit = plan_with_habits(
+        p, alpha, dx, STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR,
+        reward_func, reward_func_last, T)
+
+    actions_executed, state_trajectory, x_trajectory, q_trajectory = (
+        simulate_behavior_with_habit(policy_opt_habit, T, alpha, dx, STATES,
+                                     ACTIONS, HORIZON, plot=False))
+
+    actions_executed = np.array(actions_executed)
+    state_trajectory = np.array(state_trajectory)
+    time = np.arange(HORIZON)
+    plt.plot(state_trajectory, label=f'p={p}')
+    plt.scatter(time[actions_executed == 1],
+                state_trajectory[:-1][actions_executed == 1])
+    plt.xticks(np.arange(HORIZON+1))
+    plt.legend()
+
+# %%
+p = 0.3
+f1, ax1 = plt.subplots()
+f2, ax2 = plt.subplots()
+for alpha in [0.0, 0.5, 0.9]:
+    V_opt_habit, policy_opt_habit, Q_values_habit = plan_with_habits(
+        p, alpha, dx, STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR,
+        reward_func, reward_func_last, T)
+
+    actions_executed, state_trajectory, x_trajectory, q_trajectory = (
+        simulate_behavior_with_habit(policy_opt_habit, T, alpha, dx, STATES,
+                                     ACTIONS, HORIZON, plot=False))
+    actions_executed = np.array(actions_executed)
+    state_trajectory = np.array(state_trajectory)
+    time = np.arange(HORIZON)
+    ax1.plot(state_trajectory, label=f'alpha={alpha}')
+    ax1.scatter(time[actions_executed == 1],
+                state_trajectory[:-1][actions_executed == 1])
+    ax1.set_xticks(np.arange(HORIZON+1))
+    ax1.legend()
+
+    q_diff = np.array([np.diff(a)[0] if len(a) > 1 else np.nan
+                       for a in q_trajectory], dtype=float)
+    print(x_trajectory)
+    ax2.plot(time, q_diff, label=f'alpha={alpha}')
+    ax2.set_xticks(np.arange(HORIZON))
+    ax2.set_ylabel('Q(shirk) - Q(work)')
+    ax2.legend()
 
 # %%
