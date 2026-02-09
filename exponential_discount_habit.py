@@ -89,7 +89,7 @@ def plan_with_habits_one_step(
     return V_opt, policy_opt, Q_values
 
 
-def update_memory_habit(alpha, s, x, W, action, action_num):
+def update_memory_habit(alpha, x, W, action, action_num):
     if action_num > 1:
         W_next = alpha * W + 1
         # assuming action is 0/1 and 1 is "cooperate" (work or resist):
@@ -144,7 +144,7 @@ def plan_with_habits(
                     q = 0
                     for a_exec in range(len(actions[i_state])):
                         x_next = update_memory_habit(
-                            alpha, state, x, W, a_exec, len(actions[i_state]))
+                            alpha, x, W, a_exec, len(actions[i_state]))
                         i_x_next = np.argmin(np.abs(X_norm - x_next))
 
                         q += p_exec[a_exec] * (
