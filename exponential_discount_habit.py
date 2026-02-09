@@ -61,7 +61,7 @@ def plan_with_habits_one_step(
                 if i_timestep < horizon-1:
                     value_next = np.full(len(states), 0.0)
                     for next_state in range(len(states)):
-                        if next_state == i_state:
+                        if actions[next_state] == actions[i_state]:
                             opt_action = policy_opt[next_state, i_timestep+1]
                             value_next[next_state] = (
                                 p_sticky *
@@ -176,13 +176,13 @@ ACTIONS[:-1] = [['shirk', 'work']
                 for i in range(len(STATES)-1)]
 ACTIONS[-1] = ['done']  # actions for final state
 
-HORIZON = 3  # deadline
+HORIZON = 5  # deadline
 DISCOUNT_FACTOR = 0.9  # common d iscount factor for both
-EFFICACY = 1.0  # self-efficacy (probability of progress on working)
+EFFICACY = 0.8  # self-efficacy (probability of progress on working)
 
 # utilities :
 REWARD_DO = 0.0
-EFFORT_DO = -1.0
+EFFORT_DO = -0.8
 # delayed rewards:
 REWARD_COMPLETED = 2.0
 COST_NOT_COMPLETED = -0.0
@@ -200,7 +200,7 @@ V_opt, policy_opt, Q_values = mdp_algms.find_optimal_policy_prob_rewards(
     T)
 
 # level 0: take habits into account
-p_sticky = 0.6
+p_sticky = 0.3
 V_opt_habit_one, policy_opt_habit_one, Q_values_habit_one = (
     plan_with_habits_one_step(
         p_sticky, STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
@@ -210,7 +210,7 @@ V_opt_habit_one, policy_opt_habit_one, Q_values_habit_one = (
 
 policies = []
 
-discount = 0.9
+discount = DISCOUNT_FACTOR
 T = task_structure.transitions_procrastination(STATES, EFFICACY)
 # level -1
 V_opt, policy_opt, Q_values = mdp_algms.find_optimal_policy_prob_rewards(
@@ -243,10 +243,35 @@ plt.show()
 
 # %% policies exponential filtering habit
 p = 0.3
-alpha = 0
+alpha = 0.5
 dx = 0.01
 V_opt_habit, policy_opt_habit, Q_values_habit = plan_with_habits(
     p, alpha, dx, STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
     reward_func_last, T)
+
+# simulate behavior with habit
+# starting states:
+x = 0.0
+s = 0
+X_norm = np.arange(0, 1+dx, dx)
+actions_executed = []
+state_trajectory = []
+x_trajectory = []
+for t in range(HORIZON):
+    i_x = np.argmin(np.abs(X_norm - x))
+    action = policy_opt_habit[i_x, s, t]
+    actions_executed.append(action)
+    x = update_memory_habit(alpha, s, x, (1-alpha**t)/(1-alpha), action,
+                            len(ACTIONS[s]))
+    x_trajectory.append(x)
+    # transition to next state
+    s = np.random.choice(len(STATES), p=T[s][action])
+    state_trajectory.append(s)
+plt.plot(state_trajectory, label='states')
+plt.plot(actions_executed, label='actions')
+plt.plot(x_trajectory, label='habit strength')
+plt.xticks(np.arange(HORIZON))
+plt.legend()
+plt.show()
 
 # %%
