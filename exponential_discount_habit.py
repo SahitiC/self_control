@@ -242,8 +242,8 @@ ax.set_yticklabels([0, 0.1, 0.3, 0.6, 0.9])
 plt.show()
 
 # %% policies exponential filtering habit
-p = 0.3
-alpha = 0
+p = 0.5
+alpha = 0.0
 dx = 0.01
 V_opt_habit, policy_opt_habit, Q_values_habit = plan_with_habits(
     p, alpha, dx, STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
