@@ -341,5 +341,3 @@ for alpha in [0.0, 0.5, 0.9]:
     ax2.set_xticks(np.arange(HORIZON))
     ax2.set_ylabel('Q(shirk) - Q(work)')
     ax2.legend()
-
-# %%

@@ -187,6 +187,115 @@ def self_control_with_actions_one_step_habit(
     return V_real_full, Q_values_full
 
 
+def update_memory_habit(alpha, x, W, action, action_num):
+    if action_num > 1:
+        W_next = alpha * W + 1
+        # assuming action is 0/1 and 1 is "cooperate" (work or resist):
+        x_next = (alpha * W * x + action) / W_next
+    else:
+        x_next = x
+    return x_next
+
+
+def self_control_with_actions_habit(
+        prev_level_effective_policy, level, p, alpha, dx, states, actions,
+        horizon, T, reward_func, reward_func_last, cost_func=None,
+        cost_func_last=None, discount_factor_reward=None,
+        discount_factor_cost=None, discount_beta=None, discount_delta=None,
+        disc_func='diff_disc'):
+    """
+    calculate higher level policies taking into account the true lower level
+    actions and stickiness  (stickiness is one step)
+    """
+
+    V_real_full = []
+    Q_values_full = []
+    X_norm = np.arange(0, 1+dx, dx)
+
+    # solve for optimal policy for i_iter-agent,
+    # given real actions of future agents
+    for i_iter in range(horizon-1, -1, -1):
+
+        V_real = np.zeros((len(states), horizon+1))
+        Q_values = np.zeros(len(states), dtype=object)
+
+        for i_state, state in enumerate(states):
+
+            # arrays to store Q-values for each action in each state
+            Q_values[i_state] = np.full((len(actions[i_state]), horizon),
+                                        np.nan)
+
+            # "Q_values" for last time-step
+            if disc_func == 'diff_disc':
+                V_real[i_state, -1] = (
+                    (discount_factor_reward**(horizon-i_iter))
+                    * reward_func_last[i_state]
+                    + (discount_factor_cost**(horizon-i_iter))
+                    * cost_func_last[i_state])
+            elif disc_func == 'beta_delta':
+                V_real[i_state, -1] = (
+                    (discount_beta*discount_delta**(horizon-i_iter))
+                    * reward_func_last[i_state])
+
+        # backward induction to derive optimal policy starting from
+        # timestep i_iter
+        for i_timestep in range(horizon-1, i_iter-1, -1):
+            # normalisation weight for habit is completely determined by time
+            W = (1 - alpha**i_timestep) / (1 - alpha)
+
+            for i_x, x in enumerate(X_norm):
+
+                for i_state, state in enumerate(states):
+                    Q = np.full(len(actions[i_state]), np.nan)
+
+                    for i_action, action in enumerate(actions[i_state]):
+
+                        if len(actions[i_state]) > 1:
+                            # probability of [defect, cooperate]
+                            p_exec = p * np.array([1 - x, x])
+                            p_exec[i_action] += (1 - p)
+                        else:  # here only one action
+                            p_exec = [1.0]
+
+                        if disc_func == 'diff_disc':
+                            r = ((discount_factor_reward**(i_timestep-i_iter))
+                                 * reward_func[i_state][i_action]
+                                 + (discount_factor_cost**(i_timestep-i_iter))
+                                 * cost_func[i_state][i_action])
+                        elif disc_func == 'beta_delta':
+                            if i_timestep == i_iter:
+                                r = reward_func[i_state][i_action]
+                            else:
+                                r = ((discount_beta
+                                      * discount_delta**(i_timestep-i_iter))
+                                     * reward_func[i_state][i_action])
+
+                        q = 0
+                        for a_exec in range(len(actions[i_state])):
+                            x_next = update_memory_habit(
+                                alpha, x, W, a_exec, len(actions[i_state]))
+                            i_x_next = np.argmin(np.abs(X_norm - x_next))
+
+                            q += p_exec[a_exec] * (
+                                T[i_state][a_exec] @ r.T
+                                + (T[i_state][a_exec] @
+                                    V_real[i_x_next, :, i_timestep+1]))
+
+                            # q-value for each action (bellman equation)
+                        Q[i_action] = q
+
+                    Q_values[i_x, i_state][:, i_timestep] = Q
+                    # what are the real V's? i.e. not the max Q value
+                    # but the Q-value of the best action of the level-1 agent
+                    V_real[i_x, i_state, i_timestep] = Q[
+                        prev_level_effective_policy[i_state, i_timestep]]
+
+        V_real_full.append(V_real)
+        Q_values_full.append(Q_values)
+
+    return V_real_full, Q_values_full
+
+
 def get_all_levels_self_control(
         level_no, Q_values_full_naive, effective_naive_policy, states, actions,
         horizon, T, reward_func, reward_func_last, cost_func=None,
