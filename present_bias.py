@@ -135,8 +135,30 @@ Q_diff_levels_state, policy_levels_state, policy_full_levels = (
         level_no, Q_values_full_naive, effective_naive_policy, STATES, ACTIONS,
         HORIZON, T, reward_func, reward_func_last,
         discount_beta=DISCOUNT_BETA, discount_delta=DISCOUNT_DELTA,
-        disc_func='beta_delta', state_to_get=state_to_get, sticky=True,
+        disc_func='beta_delta', state_to_get=state_to_get, sticky='one_step',
         p_sticky=P_STICKY))
+
+helper.plot_heatmap(np.array(policy_levels_state),
+                    cmap=sns.color_palette('husl', 2),
+                    ylabel='level k effective policy',
+                    xlabel='agent at timestep',
+                    colorbar_ticklabels=['TEMPT', 'RESIST'])
+
+helper.plot_Q_value_diff(np.array(Q_diff_levels_state), 'coolwarm',
+                         ylabel='level k diff in Q-values \n (RESIST-TEMPT)',
+                         xlabel='agent at timestep', vmin=-0.65, vmax=0.65)
+
+# %%
+p = 0.6
+alpha = 0.0
+dx = 0.01
+Q_diff_levels_state, policy_levels_state, policy_full_levels = (
+    self_control.get_all_levels_self_control(
+        level_no, Q_values_full_naive, effective_naive_policy, STATES, ACTIONS,
+        HORIZON, T, reward_func, reward_func_last,
+        discount_beta=DISCOUNT_BETA, discount_delta=DISCOUNT_DELTA,
+        disc_func='beta_delta', state_to_get=state_to_get, sticky='multi_step',
+        p=p, alpha=alpha, dx=dx))
 
 helper.plot_heatmap(np.array(policy_levels_state),
                     cmap=sns.color_palette('husl', 2),
