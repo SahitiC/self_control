@@ -25,8 +25,8 @@ ACTIONS[:-1] = [['shirk', 'work']
 ACTIONS[-1] = ['shirk']  # actions for final state
 
 HORIZON = 6  # deadline
-DISCOUNT_FACTOR_REWARD = 0.7  # discounting factor for rewards
-DISCOUNT_FACTOR_COST = 0.5  # discounting factor for costs
+DISCOUNT_FACTOR_REWARD = 0.8  # discounting factor for rewards
+DISCOUNT_FACTOR_COST = 0.6  # discounting factor for costs
 DISCOUNT_FACTOR_COMMON = 0.9  # common d iscount factor for both
 EFFICACY = 0.6  # self-efficacy (probability of progress on working)
 
@@ -87,7 +87,7 @@ helper.plot_Q_value_diff(np.array(Q_diff_levels_state), 'coolwarm',
                          xlabel='agent at timestep', vmin=-0.65, vmax=0.65)
 
 # %% plan with stickiness
-P_STICKY = 0.7
+P_STICKY = 0.1
 Q_diff_levels_state, policy_levels_state, policy_full_levels = (
     self_control.get_all_levels_self_control(
         level_no, Q_values_full_naive, effective_naive_policy, STATES, ACTIONS,
@@ -95,7 +95,7 @@ Q_diff_levels_state, policy_levels_state, policy_full_levels = (
         cost_func_last=cost_func_last,
         discount_factor_reward=DISCOUNT_FACTOR_REWARD,
         discount_factor_cost=DISCOUNT_FACTOR_COST, disc_func='diff_disc',
-        state_to_get=state_to_get, sticky=True, p_sticky=P_STICKY))
+        state_to_get=state_to_get, sticky='one_step', p_sticky=P_STICKY))
 
 helper.plot_heatmap(np.array(policy_levels_state),
                     cmap=sns.color_palette('husl', 2),
@@ -105,5 +105,24 @@ helper.plot_heatmap(np.array(policy_levels_state),
 helper.plot_Q_value_diff(np.array(Q_diff_levels_state), 'coolwarm',
                          ylabel='level k diff in Q-values \n (WORK-SHIRK)',
                          xlabel='agent at timestep', vmin=-0.65, vmax=0.65)
+
+# %% plan with mutli-step stickiness
+p = 0.1
+alpha = 0.0
+dx = 0.01
+Q_diff_levels_state, policy_levels_state, policy_full_levels = (
+    self_control.get_all_levels_self_control(
+        level_no, Q_values_full_naive, effective_naive_policy, STATES, ACTIONS,
+        HORIZON, T, reward_func, reward_func_last, cost_func=cost_func,
+        cost_func_last=cost_func_last,
+        discount_factor_reward=DISCOUNT_FACTOR_REWARD,
+        discount_factor_cost=DISCOUNT_FACTOR_COST, disc_func='diff_disc',
+        state_to_get=state_to_get, sticky='multi_step', p=p, alpha=alpha,
+        dx=dx))
+
+actions_executed, state_trajectory, x_trajectory = (
+    self_control.simulate_behavior_with_habit(
+        policy_full_levels[3], T, alpha, dx, STATES, ACTIONS, HORIZON,
+        plot=True))
 
 # %%

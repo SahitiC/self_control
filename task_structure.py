@@ -69,8 +69,8 @@ def rewards_cake(states, reward_tempt, effort_resist,
     reward_func.append([np.full(len(states), reward_tempt),
                         np.full(len(states), effort_resist)])
     # reward for state 1, for tempt, resist
-    # if tempt -> r_tempt & if resist -> e_resist + r_resist from last timestep
-    # in both cases (doesn't matter what the next state is  )
+    # (if tempt -> r_tempt & if resist -> e_resist) + r_resist from last
+    # timestep in both cases (doesn't matter what the next state is)
     reward_func.append([np.full(len(states), reward_resist + reward_tempt),
                         np.full(len(states), reward_resist + effort_resist)])
     reward_func_last = np.array([0.0, reward_resist])

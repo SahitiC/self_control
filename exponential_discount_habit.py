@@ -163,7 +163,8 @@ def plan_with_habits(
 
 
 def simulate_behavior_with_habit(
-        policy_opt_habit, T, alpha, dx, states, actions, horizon, plot=False):
+        policy_opt_habit, Q_values_habit, T, alpha, dx, states, actions,
+        horizon, plot=False):
 
     # starting states:
     x = 0.0
@@ -323,8 +324,9 @@ for alpha in [0.0, 0.5, 0.9]:
         reward_func, reward_func_last, T)
 
     actions_executed, state_trajectory, x_trajectory, q_trajectory = (
-        simulate_behavior_with_habit(policy_opt_habit, T, alpha, dx, STATES,
-                                     ACTIONS, HORIZON, plot=False))
+        simulate_behavior_with_habit(policy_opt_habit, Q_values_habit, T,
+                                     alpha, dx, STATES, ACTIONS, HORIZON,
+                                     plot=False))
     actions_executed = np.array(actions_executed)
     state_trajectory = np.array(state_trajectory)
     time = np.arange(HORIZON)

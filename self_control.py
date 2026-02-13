@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def self_control_with_actions(
@@ -261,21 +262,26 @@ def self_control_with_actions_habit(
                         else:  # here only one action
                             p_exec = [1.0]
 
-                        if disc_func == 'diff_disc':
-                            r = ((discount_factor_reward**(i_timestep-i_iter))
-                                 * reward_func[i_state][i_action]
-                                 + (discount_factor_cost**(i_timestep-i_iter))
-                                 * cost_func[i_state][i_action])
-                        elif disc_func == 'beta_delta':
-                            if i_timestep == i_iter:
-                                r = reward_func[i_state][i_action]
-                            else:
-                                r = ((discount_beta
-                                      * discount_delta**(i_timestep-i_iter))
-                                     * reward_func[i_state][i_action])
-
                         q = 0
                         for a_exec in range(len(actions[i_state])):
+
+                            if disc_func == 'diff_disc':
+                                r = ((
+                                    discount_factor_reward**(i_timestep
+                                                             - i_iter))
+                                     * reward_func[i_state][a_exec]
+                                     + (discount_factor_cost **
+                                        (i_timestep-i_iter))
+                                     * cost_func[i_state][a_exec])
+                            elif disc_func == 'beta_delta':
+                                if i_timestep == i_iter:
+                                    r = reward_func[i_state][a_exec]
+                                else:
+                                    r = ((discount_beta
+                                          * discount_delta**(i_timestep
+                                                             - i_iter))
+                                         * reward_func[i_state][a_exec])
+
                             x_next = update_memory_habit(
                                 alpha, x, W, a_exec, len(actions[i_state]))
                             i_x_next = np.argmin(np.abs(X_norm - x_next))
@@ -292,7 +298,7 @@ def self_control_with_actions_habit(
                     # what are the real V's? i.e. not the max Q value
                     # but the Q-value of the best action of the level-1 agent
                     V_real[i_x, i_state, i_timestep] = Q[
-                        prev_level_effective_policy[i_state, i_timestep]]
+                        prev_level_effective_policy[i_x, i_state, i_timestep]]
 
         V_real_full.append(V_real)
         Q_values_full.append(Q_values)
@@ -315,26 +321,39 @@ def get_all_levels_self_control(
     Q_diff_levels_state = []
     policy_levels_state = []
     policy_full_levels = []
-    X_norm = np.arange(0, 1+dx, dx)
 
-    Q_diff_naive = []
-    for t in range(horizon):
-        Q_diff_naive.append(np.diff(
-            Q_values_full_naive[horizon-1-t][state_to_get][:, t])[0])
-
-    Q_diff_levels_state.append(Q_diff_naive)
-    policy_levels_state.append(effective_naive_policy[state_to_get])
-
-    effective_policy_prev_level = effective_naive_policy
-    policy_full_levels.append(effective_policy_prev_level)
+    if sticky == 'multi_step':
+        X_norm = np.arange(0, 1+dx, dx)
+        # Q_diff_nive doesn't have the i_x dimension
+        Q_diff_naive = []
+        for t in range(horizon):
+            Q_diff_naive.append(np.diff(
+                Q_values_full_naive[horizon-1-t][state_to_get][:, t])[0])
+        Q_diff_levels_state.append(Q_diff_naive)
+        # naive agent doesn't consider stickiness: so no i_x dimension
+        # expand it to be able to compare with higher levels
+        e_repeat = np.repeat(
+            effective_naive_policy[np.newaxis, :, :], len(X_norm), axis=0)
+        policy_levels_state.append(e_repeat[:, state_to_get])
+        prev_level_effective_policy = e_repeat
+        policy_full_levels.append(prev_level_effective_policy)
+    else:
+        Q_diff_naive = []
+        for t in range(horizon):
+            Q_diff_naive.append(np.diff(
+                Q_values_full_naive[horizon-1-t][state_to_get][:, t])[0])
+        Q_diff_levels_state.append(Q_diff_naive)
+        policy_levels_state.append(effective_naive_policy[state_to_get])
+        prev_level_effective_policy = effective_naive_policy
+        policy_full_levels.append(prev_level_effective_policy)
 
     for level in range(level_no):
 
         if sticky == 'one_step':
             # calculate next level with stickiness
-            V_current_level, Q_current_level = (
+            _, Q_current_level = (
                 self_control_with_actions_one_step_habit(
-                    effective_policy_prev_level, level, p_sticky, states,
+                    prev_level_effective_policy, level, p_sticky, states,
                     actions, horizon, T, reward_func, reward_func_last,
                     cost_func, cost_func_last, discount_factor_reward,
                     discount_factor_cost, discount_beta, discount_delta,
@@ -342,9 +361,9 @@ def get_all_levels_self_control(
 
         elif sticky == 'multi_step':
             # calculate next level with habit
-            V_current_level, Q_current_level = (
+            _, Q_current_level = (
                 self_control_with_actions_habit(
-                    effective_policy_prev_level, level, p, alpha, dx, states,
+                    prev_level_effective_policy, level, p, alpha, dx, states,
                     actions, horizon, T, reward_func, reward_func_last,
                     cost_func, cost_func_last, discount_factor_reward,
                     discount_factor_cost, discount_beta, discount_delta,
@@ -352,25 +371,83 @@ def get_all_levels_self_control(
 
         elif sticky == 'no_sticky':
             # calculate next level
-            V_current_level, Q_current_level = self_control_with_actions(
-                effective_policy_prev_level, states, actions, horizon, T,
+            _, Q_current_level = self_control_with_actions(
+                prev_level_effective_policy, states, actions, horizon, T,
                 reward_func, reward_func_last, cost_func, cost_func_last,
                 discount_factor_reward, discount_factor_cost, discount_beta,
                 discount_delta, disc_func)
 
         # update effective policy, Q_diff
-        effective_policy_prev_level = np.full(
-            (len(X_norm), len(states), horizon), 100)
-        Q_diff = []  # diff only for state=0
-        for t in range(horizon):
-            Q_diff.append(np.diff(
-                Q_current_level[horizon-1-t][state_to_get][:, t])[0])
-            for state in states:
-                effective_policy_prev_level[state, horizon-1-t] = np.argmax(
-                    Q_current_level[t][state][:, horizon-1-t])
+        if sticky == 'multi_step':
+            effective_policy_prev_level = np.full((len(X_norm), len(states),
+                                                   horizon), 100)
+            Q_diff = []  # diff only for state=0
+            for t in range(horizon):
+                q = np.stack(Q_current_level[horizon-1-t][:, state_to_get])
+                # q_diff for all x's in given state-to-get and time t:
+                Q_diff.append(np.diff(q[:, :, t]))
+                for state in states:
+                    for i_x in range(len(X_norm)):
+                        effective_policy_prev_level[
+                            i_x, state, horizon-1-t] = np.argmax(
+                            Q_current_level[t][i_x, state][:, horizon-1-t])
+            Q_diff_levels_state.append(Q_diff)
+            policy_levels_state.append(
+                effective_policy_prev_level[state_to_get])
+            policy_full_levels.append(effective_policy_prev_level)
 
-        Q_diff_levels_state.append(Q_diff)
-        policy_levels_state.append(effective_policy_prev_level[state_to_get])
-        policy_full_levels.append(effective_policy_prev_level)
+        else:
+            # effective_policy_prev_level = Q_current_level[0][
+            #     :, horizon-1-level].argmax(axis=0)
+            effective_policy_prev_level = np.full((len(states), horizon), 100)
+            Q_diff = []  # diff only for state=0
+            for t in range(horizon):
+                Q_diff.append(np.diff(
+                    Q_current_level[horizon-1-t][state_to_get][:, t])[0])
+                for state in states:
+                    effective_policy_prev_level[
+                        state, horizon-1-t] = np.argmax(
+                        Q_current_level[t][state][:, horizon-1-t])
+            Q_diff_levels_state.append(Q_diff)
+            policy_levels_state.append(
+                effective_policy_prev_level[state_to_get])
+            policy_full_levels.append(effective_policy_prev_level)
 
     return Q_diff_levels_state, policy_levels_state, policy_full_levels
+
+
+def simulate_behavior_with_habit(
+        policy_effective, T, alpha, dx, states, actions, horizon,
+        plot=False):
+
+    # starting states:
+    x = 0.0
+    s = 0
+    X_norm = np.arange(0, 1+dx, dx)
+    actions_executed = []
+    state_trajectory = [s]
+    x_trajectory = [x]
+    for t in range(horizon):
+        i_x = np.argmin(np.abs(X_norm - x))
+        action = policy_effective[i_x, s, t]
+        actions_executed.append(action)
+        x = update_memory_habit(alpha, x, (1-alpha**t)/(1-alpha), action,
+                                len(actions[s]))
+        x_trajectory.append(x)
+        # transition to next state
+        s = np.random.choice(len(states), p=T[s][action])
+        state_trajectory.append(s)
+
+    if plot:
+        actions_executed = np.array(actions_executed)
+        state_trajectory = np.array(state_trajectory)
+        time = np.arange(horizon)
+        plt.plot(state_trajectory, label='states')
+        plt.plot(x_trajectory, label='habit strength (cooperate)')
+        plt.scatter(time[actions_executed == 1],
+                    state_trajectory[:-1][actions_executed == 1],
+                    label='action=cooperate')
+        plt.xticks(np.arange(horizon+1))
+        plt.legend()
+        plt.show()
+    return actions_executed, state_trajectory, x_trajectory
