@@ -178,7 +178,7 @@ def simulate_behavior_with_habit(
         i_x = np.argmin(np.abs(X_norm - x))
         action = policy_opt_habit[i_x, s, t]
         actions_executed.append(action)
-        x = update_memory_habit(alpha, s, x, (1-alpha**t)/(1-alpha), action,
+        x = update_memory_habit(alpha, x, (1-alpha**t)/(1-alpha), action,
                                 len(actions[s]))
         x_trajectory.append(x)
         # transition to next state
@@ -291,8 +291,8 @@ V_opt_habit, policy_opt_habit, Q_values_habit = plan_with_habits(
 
 # simulate behavior with habit
 _, _, _, _ = (
-    simulate_behavior_with_habit(policy_opt_habit, T, alpha, dx, STATES,
-                                 ACTIONS, HORIZON, plot=True))
+    simulate_behavior_with_habit(policy_opt_habit, Q_values_habit, T, alpha,
+                                 dx, STATES, ACTIONS, HORIZON, plot=True))
 
 # %% vary params
 
@@ -302,8 +302,9 @@ for p in [0.0, 0.3, 0.6, 0.9]:
         reward_func, reward_func_last, T)
 
     actions_executed, state_trajectory, x_trajectory, q_trajectory = (
-        simulate_behavior_with_habit(policy_opt_habit, T, alpha, dx, STATES,
-                                     ACTIONS, HORIZON, plot=False))
+        simulate_behavior_with_habit(policy_opt_habit, Q_values_habit, T,
+                                     alpha, dx, STATES, ACTIONS, HORIZON,
+                                     plot=False))
 
     actions_executed = np.array(actions_executed)
     state_trajectory = np.array(state_trajectory)
@@ -343,3 +344,5 @@ for alpha in [0.0, 0.5, 0.9]:
     ax2.set_xticks(np.arange(HORIZON))
     ax2.set_ylabel('Q(shirk) - Q(work)')
     ax2.legend()
+
+# %%
