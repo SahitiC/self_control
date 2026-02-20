@@ -25,10 +25,10 @@ ACTIONS[:-1] = [['shirk', 'work']
 ACTIONS[-1] = ['shirk']  # actions for final state
 
 HORIZON = 6  # deadline
-DISCOUNT_FACTOR_REWARD = 0.8  # discounting factor for rewards
+DISCOUNT_FACTOR_REWARD = 0.9  # discounting factor for rewards
 DISCOUNT_FACTOR_COST = 0.6  # discounting factor for costs
 DISCOUNT_FACTOR_COMMON = 0.9  # common d iscount factor for both
-EFFICACY = 0.6  # self-efficacy (probability of progress on working)
+EFFICACY = 0.7  # self-efficacy (probability of progress on working)
 
 # utilities :
 REWARD_DO = 2.0
@@ -87,7 +87,7 @@ helper.plot_Q_value_diff(np.array(Q_diff_levels_state), 'coolwarm',
                          xlabel='agent at timestep', vmin=-0.65, vmax=0.65)
 
 # %% plan with stickiness
-P_STICKY = 0.1
+P_STICKY = 0.3
 Q_diff_levels_state, policy_levels_state, policy_full_levels = (
     self_control.get_all_levels_self_control(
         level_no, Q_values_full_naive, effective_naive_policy, STATES, ACTIONS,
@@ -107,8 +107,8 @@ helper.plot_Q_value_diff(np.array(Q_diff_levels_state), 'coolwarm',
                          xlabel='agent at timestep', vmin=-0.65, vmax=0.65)
 
 # %% plan with mutli-step stickiness
-p = 0.1
-alpha = 0.0
+p = 0.3
+alpha = 0.8
 dx = 0.01
 Q_diff_levels_state, policy_levels_state, policy_full_levels = (
     self_control.get_all_levels_self_control(
