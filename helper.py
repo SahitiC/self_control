@@ -5,7 +5,7 @@ import seaborn as sns
 
 def plot_heatmap(policy_state, cmap, ylabel='', xlabel='', title='',
                  colorbar_ticks=[0.25, 0.75],
-                 colorbar_ticklabels=['SHIRK', 'WORK'], vmin=0, vmax=1):
+                 colorbar_ticklabels=['DEFECT', 'COOPERATE'], vmin=0, vmax=1):
     """
     heat map of full policy in a given state
     """
