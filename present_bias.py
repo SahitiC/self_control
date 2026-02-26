@@ -12,7 +12,7 @@ mpl.rcParams['lines.linewidth'] = 2
 
 # %% health rewards one step later
 
-exception = True
+exception = False
 
 if exception:
 
@@ -20,7 +20,7 @@ if exception:
 
     # same situation as below but with additional exception states
 
-    P_EXCEPTION = 0.1  # prob of exception happening
+    P_EXCEPTION = 0.15  # prob of exception happening
     # 4 STATES:
     # 0 (no health reward pending), 1 (health reward pending)
     # 2, 3 (exception happened, (no) health reward pending)
@@ -31,7 +31,7 @@ if exception:
     ACTIONS = [['tempt', 'resist']
                for i in range(len(STATES))]
 
-    HORIZON = 4  # deadline
+    HORIZON = 20  # deadline
     DISCOUNT_BETA = 0.7  # discounting factor for rewards
     DISCOUNT_DELTA = 0.8  # discounting factor for costs
 
@@ -74,8 +74,8 @@ else:
                for i in range(len(STATES))]
 
     HORIZON = 4  # deadline
-    DISCOUNT_BETA = 0.7  # discounting factor for rewards
-    DISCOUNT_DELTA = 0.8  # discounting factor for costs
+    DISCOUNT_BETA = 0.7  # present bias
+    DISCOUNT_DELTA = 0.8  # standard discounting
 
     # utilities :
     EFFORT_RESIST = 0
@@ -97,7 +97,7 @@ V_full_naive, policy_full_naive, Q_values_full_naive = (
 effective_naive_policy = helper.get_effective_policy(
     STATES, policy_full_naive, HORIZON)
 
-state_to_get = 3
+state_to_get = 0
 policy_state = np.array([policy_full_naive[i][state_to_get]
                          for i in range(HORIZON)])
 Q_values = [Q_values_full_naive[i][state_to_get] for i in range(HORIZON)]
@@ -151,7 +151,7 @@ helper.plot_Q_value_diff(np.array(Q_diff_levels_state), 'coolwarm',
 
 # %%
 p = 0.9
-alpha = 0.99
+alpha = 0.1
 dx = 0.01
 Q_diff_levels_state, policy_levels_state, policy_full_levels = (
     self_control.get_all_levels_self_control(
@@ -161,10 +161,10 @@ Q_diff_levels_state, policy_levels_state, policy_full_levels = (
         disc_func='beta_delta', state_to_get=state_to_get, sticky='multi_step',
         p=p, alpha=alpha, dx=dx))
 
-# simulate actions with level=3 policy
+# simulate actions with level=N policy
 actions_executed, state_trajectory, x_trajectory = (
     self_control.simulate_behavior_with_habit(
-        policy_full_levels[3], T, alpha, dx, STATES, ACTIONS, HORIZON,
+        policy_full_levels[-1], T, alpha, dx, STATES, ACTIONS, HORIZON,
         plot=True))
 
 # %% vary params
