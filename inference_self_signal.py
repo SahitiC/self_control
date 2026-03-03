@@ -10,9 +10,10 @@ import matplotlib.pyplot as plt
 
 
 def bamdp_inference(states, actions, horizon, discount_factor,
-                    T, dr, reward_func_low, reward_func_high,
+                    T, dr, reward_func_low, reward_func_high, reward_func_true,
                     reward_func_last_low, reward_func_last_high,
-                    policy_low, policy_high, eps=10**-6):
+                    reward_func_last_true, policy_low, policy_high,
+                    eps=10**-6):
 
     # belief that r_tempt is r_high (instead of r_low)
     belief_r = np.arange(0, 1 + dr, dr)
@@ -127,7 +128,7 @@ T = task_structure.transitions_cake()
 
 # say reward_tempt is unknown: and is one of two, high or low
 dr = 0.01
-r_tempts = [0.5, 0.7]  # r_low, r_high
+r_tempts = [0.3, 0.7]  # r_low, r_high
 # probability of r_tempt being r_high
 belief_r = np.arange(0, 1 + dr, dr)
 reward_func_low, reward_func_last_low = task_structure.rewards_cake(
@@ -155,9 +156,12 @@ ax.set_yticks([])
 ax.set_xlabel('time step')
 
 # %% inference
+reward_func_true = reward_func_low
+reward_func_last_true = reward_func_last_high
 V_opt_infer, policy_opt_infer, Q_values_infer = bamdp_inference(
     STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, T, dr, reward_func_low,
-    reward_func_high, reward_func_last_low, reward_func_last_high,
+    reward_func_high, reward_func_true, reward_func_last_low,
+    reward_func_last_high, reward_func_last_true,
     policy_opt_low, policy_opt_high)
 
 # %% plot policy
