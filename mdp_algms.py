@@ -129,7 +129,7 @@ def find_optimal_policy_prob_rewards(states, actions, horizon, discount_factor,
     return V_opt, policy_opt, Q_values
 
 
-# my algorithm!!! for finding optimal policy with different discount factors
+# find optimal policy with different discount factors
 # for positive and negative rewards
 def find_optimal_policy_diff_discount_factors(
         states, actions, horizon, discount_factor_reward, discount_factor_cost,
