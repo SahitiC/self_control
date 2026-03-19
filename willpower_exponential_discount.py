@@ -1,0 +1,217 @@
+# %%
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import mdp_algms
+import task_structure
+import matplotlib as mpl
+mpl.rcParams['font.size'] = 24
+
+# %%
+
+
+def willpower_increase(
+        alpha, d_step, states, actions, horizon, discount_factor, reward_func,
+        reward_func_last):
+
+    # probability of success (willpower)
+    willpower = np.arange(0, 1 + d_step, d_step)
+    # arrays to store values
+    V_opt = np.full((len(willpower), len(states), horizon+1), np.nan)
+    policy_opt = np.full((len(willpower), len(states), horizon), 100)
+    Q_values = np.full((len(willpower), len(states)), np.nan, dtype=object)
+
+    # rewards for final timestep
+    for i_state, _ in enumerate(states):
+        V_opt[:, i_state, -1] = reward_func_last[i_state]
+        for i_w in range(len(willpower)):
+            Q_values[i_w, i_state] = np.full(
+                (len(actions[i_state]), horizon), np.nan)
+
+    # backward induction
+    for i_timestep in range(horizon-1, -1, -1):
+        for i_w, w in enumerate(willpower):
+            T = task_structure.transitions_cake(p=w)
+            for i_state, _ in enumerate(states):
+                Q = np.full(len(actions[i_state]), np.nan)
+                for i_action, _ in enumerate(actions[i_state]):
+                    # updates when only successes improve w
+                    # update p_success (w) if succcess:
+                    w_success = alpha * 1 + (1 - alpha) * w
+                    i_w_success = np.argmin(np.abs(willpower - w_success))
+                    # if failed:
+                    w_failed = alpha * 0 + (1 - alpha) * w
+                    i_w_failed = np.argmin(np.abs(willpower - w_failed))
+                    # if action=defection, then only w_failure is relevant
+                    # Bellman update
+                    Q[i_action] = (
+                        T[i_state][i_action] @ reward_func[i_state][i_action].T
+                        # value of next state if failure:
+                        + discount_factor * (
+                            T[i_state][i_action][0]
+                            * V_opt[i_w_failed, 0, i_timestep+1])
+                        # if success:
+                        + discount_factor * (
+                            T[i_state][i_action][1]
+                            * V_opt[i_w_success, 1, i_timestep+1]))
+                V_opt[i_w, i_state, i_timestep] = np.max(Q)
+                policy_opt[i_w, i_state, i_timestep] = np.argmax(Q)
+                Q_values[i_w, i_state][:, i_timestep] = Q
+
+    return V_opt, policy_opt, Q_values
+
+
+def simulate_trajectory(policy_opt, w_init, alpha, d_step, states,
+                        horizon, plot=False):
+
+    s = 0  # initial
+    w = w_init
+    willpower = np.arange(0, 1+d_step, d_step)
+    actions_executed = []
+    s_trajectory = [s]
+    w_trajectory = [w]
+
+    for t in range(horizon):
+        i_w = np.argmin(np.abs(willpower - w))
+        action = policy_opt[i_w, s, t]
+        actions_executed.append(action)
+        T = task_structure.transitions_cake(p=w)
+        s = np.random.choice(len(states), p=T[s][action])  # update state
+        w = alpha * s + (1 - alpha) * w  # update w for success increasing w
+        # w = alpha * action + (1 - alpha) * w  # update for trying increasing w
+        s_trajectory.append(s)
+        w_trajectory.append(w)
+
+    if plot:
+        actions_executed = np.array(actions_executed)
+        w_trajectory = np.array(w_trajectory)
+        time = np.arange(horizon)
+        plt.plot(w_trajectory, label='w')
+        plt.scatter(time[actions_executed == 1],
+                    w_trajectory[:-1][actions_executed == 1],
+                    label='action=cooperate')
+        plt.xticks(np.arange(horizon+1))
+        plt.legend()
+        plt.show()
+
+    return actions_executed, s_trajectory, w_trajectory
+
+
+def uncertain_willpower(states, actions, horizon, discount_factor, reward_func,
+                        reward_func_last, a0=1, b0=1):
+
+    # belief represented by alpha and beta
+    alphas = np.arange(a0, horizon+a0+1, 1)
+    betas = np.arange(b0, horizon+b0+1, 1)
+
+    # arrays to store values
+    V_opt = np.full((len(states), len(alphas), len(betas), horizon+1), np.nan)
+    policy_opt = np.full((len(states), len(alphas), len(betas), horizon),
+                         np.nan)
+    Q_values = np.full((len(states), len(alphas), len(betas)), np.nan,
+                       dtype=object)
+
+    # rewards for final timestep
+    for i_a in range(len(alphas)):
+        for i_b in range(len(betas)):
+            for i_state in range(len(states)):
+                V_opt[i_state, i_a, i_b, -1] = reward_func_last[i_state]
+                Q_values[i_state, i_a, i_b] = np.full(
+                    (len(actions[i_state]), horizon), np.nan)
+
+    # backward induction
+    for i_t in range(horizon-1, -1, -1):
+        for i_a, alpha in enumerate(alphas):
+            for i_b, beta in enumerate(betas):
+                if (alpha - a0) + (beta - b0) > horizon:
+                    continue
+                for i_state in range(len(states)):
+                    Q = np.full(len(actions[i_state]), np.nan)
+                    for i_action, _ in enumerate(actions[i_state]):
+                        # expected w and T
+                        expected_w = alpha/(alpha+beta)
+                        T = task_structure.transitions_cake(p=expected_w)
+
+                        # Belief update and Bellman equation
+                        if i_action == 0:
+                            i_a_next = i_a
+                            i_b_next = i_b
+                            Q[i_action] = (
+                                T[i_state][i_action]
+                                @ reward_func[i_state][i_action].T
+                                + discount_factor * (
+                                    T[i_state][i_action]
+                                    @ V_opt[:, i_a_next, i_b_next, i_t+1]))
+                        elif i_action == 1:
+                            i_a_success = min(i_a + 1, len(alphas) - 1)
+                            i_b_success = i_b
+                            i_a_fail = i_a
+                            i_b_fail = min(i_b + 1, len(betas) - 1)
+                            Q[i_action] = (
+                                T[i_state][i_action]
+                                @ reward_func[i_state][i_action].T
+                                + discount_factor * (
+                                    T[i_state][i_action][0] *
+                                    V_opt[0, i_a_fail, i_b_fail, i_t+1])
+                                + discount_factor * (
+                                    T[i_state][i_action][1] *
+                                    V_opt[1, i_a_success, i_b_success, i_t+1]))
+
+                    V_opt[i_state, i_a, i_b, i_t] = np.max(Q)
+                    policy_opt[i_state, i_a, i_b, i_t] = (
+                        np.nan if np.any(np.isnan(Q)) else np.argmax(Q))
+                    Q_values[i_state, i_a, i_b][:, i_t] = Q
+
+    return V_opt, policy_opt, Q_values
+
+# %%
+
+
+STATES = np.arange(2)
+ACTIONS = np.full(len(STATES), np.nan, dtype=object)
+ACTIONS = [['tempt', 'resist']
+           for i in range(len(STATES))]
+HORIZON = 5  # deadline
+DISCOUNT_FACTOR = 1.0
+# utilities :
+REWARD_TEMPT = 0.5
+EFFORT_RESIST = -0.1
+REWARD_RESIST = 0.8
+# probability of successfully resisting
+P_SUCCESS = 0.3
+state_to_get = 0  # state to plot the policies for
+
+# %% policy without learning in w
+
+reward_func, reward_func_last = task_structure.rewards_cake(
+    STATES, REWARD_TEMPT, EFFORT_RESIST, REWARD_RESIST)
+T = task_structure.transitions_cake(p=P_SUCCESS)
+
+V_opt, policy_opt, Q_values = mdp_algms.find_optimal_policy_prob_rewards(
+    STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func, reward_func_last, T)
+
+f, ax = plt.subplots(figsize=(5, 2))
+sns.heatmap(policy_opt[state_to_get, :][np.newaxis, :], linewidths=0.5,
+            cmap=sns.color_palette('husl', 2), cbar=False, vmin=0, vmax=1)
+ax.set_yticks([])
+ax.set_xlabel('time step')
+
+# %% with learning in w
+alpha = 0.8
+d_step = 0.01
+willpower = np.arange(0, 1.0+d_step, d_step)
+V_opt, policy_opt, Q_values = willpower_increase(
+    alpha, d_step, STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
+    reward_func_last)
+
+# %% simulate trajectories
+
+w_init = 0.5
+_, _, _ = simulate_trajectory(
+    policy_opt, w_init, alpha, d_step, STATES, HORIZON, plot=True)
+
+# %%
+V_opt_expl, policy_opt_expl, Q_values_expl = uncertain_willpower(
+    STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func, reward_func_last)
+
+# %%
