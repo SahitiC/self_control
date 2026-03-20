@@ -43,3 +43,9 @@ def get_effective_policy(states, policy_full, horizon):
             [policy_full[horizon-1-i][state][i] for i in range(horizon)]))
     effective_policy = np.array(effective_policy, dtype=int)
     return effective_policy
+
+
+def argmax_with_threshold(Q, threshold=1e-10):
+    max_val = np.max(Q)
+    tied = np.where(np.abs(Q - max_val) < threshold)[0]
+    return tied[0]  # always pick the first among tied actions

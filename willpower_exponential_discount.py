@@ -5,7 +5,8 @@ import seaborn as sns
 import mdp_algms
 import task_structure
 import matplotlib as mpl
-mpl.rcParams['font.size'] = 24
+from itertools import product
+mpl.rcParams['font.size'] = 18
 
 # %%
 
@@ -90,8 +91,8 @@ def simulate_trajectory(policy_opt, w_init, alpha, d_step, states,
         plt.scatter(time[actions_executed == 1],
                     w_trajectory[:-1][actions_executed == 1],
                     label='action=cooperate')
-        plt.xticks(np.arange(horizon+1))
-        plt.legend()
+        plt.xticks(np.arange(0, horizon+1, 5))
+        plt.legend(fontsize=14)
         plt.show()
 
     return actions_executed, s_trajectory, w_trajectory
@@ -164,6 +165,85 @@ def uncertain_willpower(states, actions, horizon, discount_factor, reward_func,
 
     return V_opt, policy_opt, Q_values
 
+
+def simulate_trajectory_uncertainty(
+        policy_opt_expl, a0, b0, w_true, states, horizon, plot=False):
+
+    # initial s, alpha a, beta b
+    s = 0
+    a = a0
+    b = b0
+    # belief represented by alpha and beta:
+    alphas = np.arange(a0, horizon+a0+1, 1)
+    betas = np.arange(b0, horizon+b0+1, 1)
+
+    actions_executed = []
+    s_trajectory = [s]
+    alpha_trajectory = [a0]
+    beta_trajectory = [b0]
+
+    for t in range(horizon):
+        i_a = a - 1
+        i_b = b - 1
+        action = int(policy_opt_expl[s, i_a, i_b, t])
+        actions_executed.append(action)
+        T = task_structure.transitions_cake(p=w_true)  # transition by true w
+        s = np.random.choice(len(states), p=T[s][action])  # update state
+        if action == 0:
+            a = a
+            b = b
+        elif action == 1:
+            if s == 1:
+                # success
+                a = min(a + 1, len(alphas))
+                b = b
+            elif s == 0:
+                # failure
+                a = a
+                b = min(b + 1, len(betas))
+        s_trajectory.append(s)
+        alpha_trajectory.append(a)
+        beta_trajectory.append(b)
+
+    if plot:
+        actions_executed = np.array(actions_executed)
+        alpha_trajectory = np.array(alpha_trajectory)
+        beta_trajectory = np.array(beta_trajectory)
+        expected_w = alpha_trajectory/(alpha_trajectory + beta_trajectory)
+        time = np.arange(horizon)
+        plt.plot(expected_w, label='expected w')
+        plt.scatter(time[actions_executed == 1],
+                    expected_w[:-1][actions_executed == 1],
+                    label='action=cooperate')
+        plt.xticks(np.arange(0, horizon+1, 5))
+        plt.legend(fontsize=14)
+        plt.show()
+
+    return actions_executed, s_trajectory, alpha_trajectory, beta_trajectory
+
+
+# case where real w improves on cooperation but there is also uncertainty
+# about the real w
+def willpower_learning_uncertain(
+        alpha, d_step, states, actions, horizon, discount_factor, reward_func,
+        reward_func_last, a0=1, b0=1):
+
+    # probability of success w (willpower)
+    willpower = np.arange(0, 1 + d_step, d_step)
+    N = len(willpower)
+    # prior belief over w grid
+    belief_0 = np.ones(N) / N
+
+    # construct belief tree through forward pass
+    belief_tree = {"": belief_0}
+    for level in range(HORIZON):
+        for h in product([0, 1], repeat=level):
+            belief = belief_tree[h]
+            belief_tree[h + (1,)] = belief_success
+            belief_tree[h + (0,)] = belief_fail
+
+    return V_opt, policy_opt, Q_values
+
 # %%
 
 
@@ -171,14 +251,14 @@ STATES = np.arange(2)
 ACTIONS = np.full(len(STATES), np.nan, dtype=object)
 ACTIONS = [['tempt', 'resist']
            for i in range(len(STATES))]
-HORIZON = 5  # deadline
-DISCOUNT_FACTOR = 1.0
+HORIZON = 20  # deadline
+DISCOUNT_FACTOR = 1
 # utilities :
 REWARD_TEMPT = 0.5
 EFFORT_RESIST = -0.1
 REWARD_RESIST = 0.8
 # probability of successfully resisting
-P_SUCCESS = 0.3
+P_SUCCESS = 0.32
 state_to_get = 0  # state to plot the policies for
 
 # %% policy without learning in w
@@ -211,7 +291,15 @@ _, _, _ = simulate_trajectory(
     policy_opt, w_init, alpha, d_step, STATES, HORIZON, plot=True)
 
 # %%
+a0 = 1
+b0 = 1
 V_opt_expl, policy_opt_expl, Q_values_expl = uncertain_willpower(
-    STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func, reward_func_last)
+    STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func, reward_func_last,
+    a0=a0, b0=b0)
+
+# %% simulate trajectories
+w_real = 0.29
+_, _, alpha_traj, beta_traj = simulate_trajectory_uncertainty(
+    policy_opt_expl, a0, b0, w_real, STATES, HORIZON, plot=True)
 
 # %%
