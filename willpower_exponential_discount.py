@@ -5,7 +5,6 @@ import seaborn as sns
 import mdp_algms
 import task_structure
 import matplotlib as mpl
-from itertools import product
 mpl.rcParams['font.size'] = 18
 
 # %%
@@ -220,29 +219,6 @@ def simulate_trajectory_uncertainty(
         plt.show()
 
     return actions_executed, s_trajectory, alpha_trajectory, beta_trajectory
-
-
-# case where real w improves on cooperation but there is also uncertainty
-# about the real w
-def willpower_learning_uncertain(
-        alpha, d_step, states, actions, horizon, discount_factor, reward_func,
-        reward_func_last, a0=1, b0=1):
-
-    # probability of success w (willpower)
-    willpower = np.arange(0, 1 + d_step, d_step)
-    N = len(willpower)
-    # prior belief over w grid
-    belief_0 = np.ones(N) / N
-
-    # construct belief tree through forward pass
-    belief_tree = {"": belief_0}
-    for level in range(HORIZON):
-        for h in product([0, 1], repeat=level):
-            belief = belief_tree[h]
-            belief_tree[h + (1,)] = belief_success
-            belief_tree[h + (0,)] = belief_fail
-
-    return V_opt, policy_opt, Q_values
 
 # %%
 
