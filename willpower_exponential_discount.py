@@ -216,7 +216,6 @@ def simulate_trajectory_uncertainty(
                     label='action=cooperate')
         plt.xticks(np.arange(0, horizon+1, 5))
         plt.legend(fontsize=14)
-        plt.show()
 
     return actions_executed, s_trajectory, alpha_trajectory, beta_trajectory
 
@@ -234,7 +233,7 @@ REWARD_TEMPT = 0.5
 EFFORT_RESIST = -0.1
 REWARD_RESIST = 0.8
 # probability of successfully resisting
-P_SUCCESS = 0.32
+P_SUCCESS = 0.34
 state_to_get = 0  # state to plot the policies for
 
 # %% policy without learning in w
@@ -253,7 +252,7 @@ ax.set_yticks([])
 ax.set_xlabel('time step')
 
 # %% with learning in w
-alpha = 0.8
+alpha = 0.5
 d_step = 0.01
 willpower = np.arange(0, 1.0+d_step, d_step)
 V_opt, policy_opt, Q_values = willpower_increase(
@@ -262,7 +261,7 @@ V_opt, policy_opt, Q_values = willpower_increase(
 
 # %% simulate trajectories
 
-w_init = 0.5
+w_init = 0.3
 _, _, _ = simulate_trajectory(
     policy_opt, w_init, alpha, d_step, STATES, HORIZON, plot=True)
 
@@ -274,8 +273,9 @@ V_opt_expl, policy_opt_expl, Q_values_expl = uncertain_willpower(
     a0=a0, b0=b0)
 
 # %% simulate trajectories
-w_real = 0.29
+w_real = 0.3
 _, _, alpha_traj, beta_traj = simulate_trajectory_uncertainty(
     policy_opt_expl, a0, b0, w_real, STATES, HORIZON, plot=True)
+plt.hlines(0.33, 0, 20, colors='k', linestyle='--', linewidth=0.75)
 
 # %%
