@@ -1,5 +1,9 @@
+import numpy as np
+
 # case where real w improves on cooperation but there is also uncertainty
 # about the real w
+
+
 def compute_belief(belief_0, ns, nf, eta, w_grid):
     belief = belief_0.copy()
     for _ in range(ns):

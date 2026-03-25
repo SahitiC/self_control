@@ -58,7 +58,7 @@ def transitions_procrastination(states, efficacy):
 # %% cake-eating with immediate and delayed rewards
 
 
-def rewards_cake(states, reward_tempt, effort_resist,
+def rewards_cake(reward_tempt, effort_resist,
                  reward_resist):
 
     # get reward matrix
