@@ -8,6 +8,7 @@ import task_structure
 import bamdp_tree
 import matplotlib as mpl
 from scipy.stats import beta
+import pandas as pd
 mpl.rcParams['font.size'] = 18
 
 # %%
@@ -101,8 +102,8 @@ def uncertain_willpower(states, actions, horizon, discount_factor, reward_func,
                         reward_func_last, a0=1, b0=1):
 
     # belief vector over w_grid represented by alpha and beta
-    alphas = np.arange(a0, horizon+a0+1, 1)
-    betas = np.arange(b0, horizon+b0+1, 1)
+    alphas = np.arange(1, horizon+a0+1, 1)
+    betas = np.arange(1, horizon+b0+1, 1)
 
     # arrays to store values
     V_opt = np.full((len(states), len(alphas), len(betas), horizon+1), np.nan)
@@ -120,10 +121,12 @@ def uncertain_willpower(states, actions, horizon, discount_factor, reward_func,
                     (len(actions[i_state]), horizon), np.nan)
 
     # backward induction
+    policy_dicts = []
     for i_t in range(horizon-1, -1, -1):
+        policy_dict = {}
         for i_a, alpha in enumerate(alphas):
             for i_b, Beta in enumerate(betas):
-                if (alpha - a0) + (Beta - b0) > horizon:
+                if (alpha - a0) + (Beta - b0) > i_t:
                     continue
                 for i_state in range(len(states)):
                     Q = np.full(len(actions[i_state]), np.nan)
@@ -158,11 +161,14 @@ def uncertain_willpower(states, actions, horizon, discount_factor, reward_func,
                                     V_opt[1, i_a_success, i_b_success, i_t+1]))
 
                     V_opt[i_state, i_a, i_b, i_t] = np.max(Q)
-                    policy_opt[i_state, i_a, i_b, i_t] = (
+                    max_action = (
                         np.nan if np.any(np.isnan(Q)) else np.argmax(Q))
+                    policy_opt[i_state, i_a, i_b, i_t] = max_action
                     Q_values[i_state, i_a, i_b][:, i_t] = Q
+                    policy_dict[alpha/(alpha+Beta)] = max_action
+        policy_dicts.append(policy_dict)
 
-    return V_opt, policy_opt, Q_values
+    return V_opt, policy_opt, Q_values, policy_dicts
 
 
 def simulate_trajectory_uncertainty(
@@ -173,8 +179,8 @@ def simulate_trajectory_uncertainty(
     a = a0
     b = b0
     # belief represented by alpha and beta:
-    alphas = np.arange(a0, horizon+a0+1, 1)
-    betas = np.arange(b0, horizon+b0+1, 1)
+    alphas = np.arange(1, horizon+a0+1, 1)
+    betas = np.arange(1, horizon+b0+1, 1)
 
     actions_executed = []
     s_trajectory = [s]
@@ -182,8 +188,8 @@ def simulate_trajectory_uncertainty(
     beta_trajectory = [b0]
 
     for t in range(horizon):
-        i_a = a - a0
-        i_b = b - b0
+        i_a = a - 1
+        i_b = b - 1
         action = int(policy_opt_expl[s, i_a, i_b, t])
         actions_executed.append(action)
         T = task_structure.transitions_cake(p=w_true)  # transition by true w
@@ -272,6 +278,21 @@ for w in w_grid:
 policy_w = np.array(policy_w)
 plotter.plot_w_policy(policy_w, w_grid, dw, HORIZON)
 
+# %% plot mean trajectories
+w = 0.2
+T = task_structure.transitions_cake(p=w)
+V_opt, policy_opt, Q_values = mdp_algms.find_optimal_policy_prob_rewards(
+    STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
+    reward_func_last, T)
+acs = []
+for _ in range(100):
+    s, a = mdp_algms.forward_runs(policy_opt, 0, HORIZON, STATES, T)
+    acs.append(a)
+acs = np.array(acs)
+plt.plot(np.arange(HORIZON), np.mean(acs, axis=0))
+plt.ylabel('proportion cooperate actions')
+plt.xlabel('time')
+
 # %% with w training
 eta = 0.2
 dw = 0.01
@@ -280,30 +301,79 @@ V_opt, policy_opt, Q_values = willpower_training(
     eta, dw, STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
     reward_func_last)
 
-# plot policy in w grid over time
+# simulate example trajectory
+w_init = 0.24
+a, s, w = simulate_trajectory(
+        policy_opt, w_init, eta, dw, STATES, HORIZON, plot=True)
+
+# %% plot policy in w grid over time
 plotter.plot_w_policy(policy_opt[:, 0, :], w_grid, dw, HORIZON)
 
-# simulate trajectories
-w_init = 0.3
-a, s, w = simulate_trajectory(
-    policy_opt, w_init, eta, dw, STATES, HORIZON, plot=True)
+# %% plot mean trajectories
+w_init = 0.2
+ws = []
+acs = []
+for i in range(100):
+    a, s, w = simulate_trajectory(
+        policy_opt, w_init, eta, dw, STATES, HORIZON, plot=False)
+    ws.append(w)
+    acs.append(a)
+ws = np.array(ws)
+acs = np.array(acs)
+plt.errorbar(np.arange(HORIZON+1), np.mean(ws, axis=0), yerr=np.std(ws, axis=0))  
+plt.show()
+plt.plot(np.arange(HORIZON), np.mean(acs, axis=0))
+plt.ylabel('proportion cooperate actions')
+plt.xlabel('time')
+plt.show()
 
 # %% with uncertainty in willpower (no training)
 a0 = 1
-b0 = 3
-V_opt_expl, policy_opt_expl, Q_values_expl = uncertain_willpower(
+b0 = 4
+V_opt_expl, policy_opt_expl, Q_values_expl, policy_dicts = uncertain_willpower(
     STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func, reward_func_last,
     a0=a0, b0=b0)
 
-# simulated trajectories
-w_real = 0.3
+# simulate example trajectories
+w_real = 0.2
 _, _, alpha_traj, beta_traj = simulate_trajectory_uncertainty(
     policy_opt_expl, a0, b0, w_real, STATES, HORIZON, plot=True)
 
 # %% plot policy for expected w (a/a+b)
-for t in range(HORIZON+1):
+policy_dicts.reverse()
+policy_df = pd.DataFrame(policy_dicts)
+policy_df.columns = policy_df.columns.astype(float)
+policy_df = policy_df.sort_index(axis=1)
+f, ax = plt.subplots(figsize=(5, 4))
+sns.heatmap(policy_df.T, cmap=sns.color_palette('husl', 2), cbar=True, 
+            vmin=0, vmax=1)
+ax.set_yticks([])
+ax.set_xticks(np.arange(0, HORIZON+1, 5))
+ax.set_xticklabels(np.arange(0, HORIZON+1, 5))
+ax.set_xlabel('time step')
+ax.set_ylabel('expected w')
+ax.invert_yaxis()
 
-    # %% with training and uncertainty in w
+# %% plot mean trajectories
+w_real = 0.2
+ws = []
+acs = []
+for i in range(100):
+    a, _, alpha_traj, beta_traj = simulate_trajectory_uncertainty(
+        policy_opt_expl, a0, b0, w_real, STATES, HORIZON, plot=False)
+    w = np.array(alpha_traj)/(np.array(alpha_traj)+np.array(beta_traj))
+    ws.append(w)
+    acs.append(a)
+ws = np.array(ws)
+acs = np.array(acs)
+plt.errorbar(np.arange(HORIZON+1), np.mean(ws, axis=0), yerr=np.std(ws, axis=0))  
+plt.show()
+plt.plot(np.arange(HORIZON), np.mean(acs, axis=0))
+plt.ylabel('proportion cooperate actions')
+plt.xlabel('time')
+
+
+# %% with training and uncertainty in w
 HORIZON = 14
 eta = 0.2
 dw = 0.01
@@ -327,7 +397,7 @@ list_of_h_sets = bamdp_tree.forward_pass(h0, HORIZON, mdp)
 V, Q, pi = bamdp_tree.backward_pass(list_of_h_sets, mdp)
 
 # %% simulate
-w_true_init = 0.3
+w_true_init = 0.2
 trajectory, rewards, actions, w_trues = bamdp_tree.online_simulation(
     pi, h0, w_true_init, w_grid, eta, HORIZON, mdp)
 plot = True
@@ -339,3 +409,24 @@ if plot:
     plotter.plot_single_trajectory(
         actions, w_trajectory, HORIZON, action_label='cooperate',
         w_label='expected w')
+
+# %% plot average trajectories
+w_true_init = 0.2
+ws = []
+acs = []
+for i in range(100):
+    trajectory, _, action, _ = bamdp_tree.online_simulation(
+    pi, h0, w_true_init, w_grid, eta, HORIZON, mdp)
+    w_trajectory = []
+    for i in range(HORIZON + 1):
+        w_expected = np.sum(np.array(trajectory[i].belief_w) * w_grid)
+        w_trajectory.append(w_expected)
+    acs.append(np.array(action))
+    ws.append(np.array(w_trajectory))
+ws = np.array(ws)
+acs = np.array(acs)
+plt.errorbar(np.arange(HORIZON+1), np.mean(ws, axis=0), yerr=np.std(ws, axis=0))  
+plt.show()
+plt.plot(np.arange(HORIZON), np.mean(acs, axis=0))
+plt.ylabel('proportion cooperate actions')
+plt.xlabel('time')
