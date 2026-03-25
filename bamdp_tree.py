@@ -253,7 +253,7 @@ def backward_pass(list_of_h_sets, mdp):
     return V, Q, pi
 
 
-def online_simulation(pi, h0, w_true_init, eta, horizon, mdp):
+def online_simulation(pi, h0, w_true_init, w_grid, eta, horizon, mdp):
 
     trajectory = [h0]
     rewards = []
@@ -273,6 +273,9 @@ def online_simulation(pi, h0, w_true_init, eta, horizon, mdp):
     def true_transition(h, a, w_true, eta, mdp):
         transition_fn = mdp.transition_fn
         reward_fn = mdp.reward_fn
+        reward_tempt = mdp.reward_tempt
+        effort_resist = mdp.effort_resist
+        reward_resist = mdp.reward_resist
         # sample success/fail using w
         next_s, next_belief_w, prob_next_s = transition_fn(h, a, w_grid, eta)
         r = reward_fn(h.s, a, reward_tempt, effort_resist, reward_resist)
@@ -304,7 +307,7 @@ if __name__ == "__main__":
     # print(hash(h2))
     # print(hash(h) == hash(h2))
 
-    dw = 0.2
+    dw = 0.01
     w_grid = np.arange(0, 1.0 + dw, dw)
     reward_tempt = 0.5
     effort_resist = -0.1
@@ -353,4 +356,3 @@ if __name__ == "__main__":
     # print(Q)
     trajectory, rewards, actions, w_trues = online_simulation(
         pi, h0, 0.2, 0.2, 1, mdp)
-    print(trajectory, rewards, actions, w_trues)

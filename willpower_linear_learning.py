@@ -5,6 +5,7 @@ import seaborn as sns
 import mdp_algms
 import task_structure
 import matplotlib as mpl
+import bamdp_tree
 mpl.rcParams['font.size'] = 18
 
 # %%
@@ -233,7 +234,7 @@ STATES = np.arange(2)
 ACTIONS = np.full(len(STATES), np.nan, dtype=object)
 ACTIONS = [['tempt', 'resist']
            for i in range(len(STATES))]
-HORIZON = 20  # deadline
+HORIZON = 15  # deadline
 DISCOUNT_FACTOR = 1
 # utilities :
 REWARD_TEMPT = 0.5
@@ -246,7 +247,7 @@ state_to_get = 0  # state to plot the policies for
 # %% policy without learning in w
 
 reward_func, reward_func_last = task_structure.rewards_cake(
-    STATES, REWARD_TEMPT, EFFORT_RESIST, REWARD_RESIST)
+    REWARD_TEMPT, EFFORT_RESIST, REWARD_RESIST)
 T = task_structure.transitions_cake(p=P_SUCCESS)
 
 V_opt, policy_opt, Q_values = mdp_algms.find_optimal_policy_prob_rewards(
@@ -273,18 +274,59 @@ a, s, w = simulate_trajectory(
 
 # %% with uncertainty in willpower
 a0 = 1
-b0 = 1
+b0 = 2
 V_opt_expl, policy_opt_expl, Q_values_expl = uncertain_willpower(
     STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func, reward_func_last,
     a0=a0, b0=b0)
 
 # simulated trajectories
-w_real = 0.29
+w_real = 0.3
 _, _, alpha_traj, beta_traj = simulate_trajectory_uncertainty(
     policy_opt_expl, a0, b0, w_real, STATES, HORIZON, plot=True)
 
 
 # %% with learning and uncertainty in w
-eta = 0.2
+HORIZON = 10
+eta = 0.01
 dw = 0.01
-willpower = np.arange(0, 1.0+dw, dw)
+w_grid = np.arange(0, 1.0+dw, dw)
+belief_w = np.ones(len(w_grid))/len(w_grid)
+belief_w = bamdp_tree.np_to_tuple(belief_w)
+mdp = bamdp_tree.CakeMDP(states=[0, 1],
+                         state_to_action_space=[[0, 1] for _ in range(2)],
+                         transition_fn=bamdp_tree.transitions_cake,
+                         reward_fn=bamdp_tree.rewards_cake,
+                         reward_last_fn=bamdp_tree.rewards_last,
+                         w_grid=w_grid,
+                         eta=eta,
+                         reward_tempt=REWARD_TEMPT,
+                         effort_resist=EFFORT_RESIST,
+                         reward_resist=REWARD_RESIST,
+                         gamma=DISCOUNT_FACTOR)
+h0 = bamdp_tree.BeliefState(s=0, belief_w=belief_w, t=0)
+list_of_h_sets = bamdp_tree.forward_pass(h0, HORIZON, mdp)
+V, Q, pi = bamdp_tree.backward_pass(list_of_h_sets, mdp)
+
+# %%
+# simulate
+w_true_init = 0.3
+trajectory, rewards, actions, w_trues = bamdp_tree.online_simulation(
+    pi, h0, w_true_init, w_grid, eta, HORIZON, mdp)
+plot = True
+if plot:
+    w_trajectory = []
+    for i in range(HORIZON + 1):
+        w_expected = np.sum(np.array(trajectory[i].belief_w) * w_grid)
+        w_trajectory.append(w_expected)
+    actions = np.array(actions)
+    w_trajectory = np.array(w_trajectory)
+    time = np.arange(HORIZON)
+    plt.plot(w_trajectory, label='w')
+    plt.scatter(time[actions == 1],
+                w_trajectory[:-1][actions == 1],
+                label='action=cooperate')
+    plt.xticks(np.arange(0, HORIZON+1, 5))
+    plt.legend(fontsize=14)
+    plt.show()
+
+# %%
