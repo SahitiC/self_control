@@ -287,7 +287,7 @@ _, _, alpha_traj, beta_traj = simulate_trajectory_uncertainty(
 
 # %% with learning and uncertainty in w
 HORIZON = 10
-eta = 0.01
+eta = 0.0
 dw = 0.01
 w_grid = np.arange(0, 1.0+dw, dw)
 belief_w = np.ones(len(w_grid))/len(w_grid)
@@ -328,5 +328,3 @@ if plot:
     plt.xticks(np.arange(0, HORIZON+1, 5))
     plt.legend(fontsize=14)
     plt.show()
-
-# %%

@@ -36,11 +36,15 @@ class CakeMDP:
 def linear_training_update(w_grid, belief_w, eta, next_s):
 
     def shift_right(arr, k):
+        if k == 0:
+            return arr
         result = np.zeros_like(arr)
         result[k:] = arr[:-k]
         return result
 
     def shift_left(arr, k):
+        if k == 0:
+            return arr
         result = np.zeros_like(arr)
         result[:-k] = arr[k:]
         return result
