@@ -84,7 +84,7 @@ def np_to_tuple(x):
 
 def rewards_cake(s, a, reward_tempt, effort_resist, reward_resist):
     if a == 0:
-        r = reward_tempt
+        r = np.array([reward_tempt])
     else:
         r = np.array([reward_tempt, 0.0]) + effort_resist
 
@@ -294,8 +294,8 @@ def online_simulation(pi, h0, w_true_init, w_grid, eta, horizon, mdp):
     for t in range(horizon):
         a = pi[h]
         actions.append(a)
-        next_h, r, w_true = true_transition(h, a, w_true, eta, mdp)
-        trajectory.append(next_h)
+        h, r, w_true = true_transition(h, a, w_true, eta, mdp)
+        trajectory.append(h)
         rewards.append(r)
         w_trues.append(w_true)
 

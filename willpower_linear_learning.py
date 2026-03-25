@@ -1,11 +1,13 @@
 # %%
+import plotter
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import mdp_algms
 import task_structure
-import matplotlib as mpl
 import bamdp_tree
+import matplotlib as mpl
+from scipy.stats import beta
 mpl.rcParams['font.size'] = 18
 
 # %%
@@ -13,7 +15,7 @@ mpl.rcParams['font.size'] = 18
 # willpower learning
 
 
-def willpower_increase(
+def willpower_training(
         eta, dw, states, actions, horizon, discount_factor, reward_func,
         reward_func_last):
 
@@ -89,16 +91,8 @@ def simulate_trajectory(policy_opt, w_init, eta, d_step, states,
         w_trajectory.append(w)
 
     if plot:
-        actions_executed = np.array(actions_executed)
-        w_trajectory = np.array(w_trajectory)
-        time = np.arange(horizon)
-        plt.plot(w_trajectory, label='w')
-        plt.scatter(time[actions_executed == 1],
-                    w_trajectory[:-1][actions_executed == 1],
-                    label='action=cooperate')
-        plt.xticks(np.arange(0, horizon+1, 5))
-        plt.legend(fontsize=14)
-        plt.show()
+        plotter.plot_single_trajectory(actions_executed, w_trajectory, horizon,
+                                       action_label='cooperate', w_label='w')
 
     return actions_executed, s_trajectory, w_trajectory
 
@@ -128,14 +122,14 @@ def uncertain_willpower(states, actions, horizon, discount_factor, reward_func,
     # backward induction
     for i_t in range(horizon-1, -1, -1):
         for i_a, alpha in enumerate(alphas):
-            for i_b, beta in enumerate(betas):
-                if (alpha - a0) + (beta - b0) > horizon:
+            for i_b, Beta in enumerate(betas):
+                if (alpha - a0) + (Beta - b0) > horizon:
                     continue
                 for i_state in range(len(states)):
                     Q = np.full(len(actions[i_state]), np.nan)
                     for i_action, _ in enumerate(actions[i_state]):
                         # expected w and T
-                        expected_w = alpha/(alpha+beta)
+                        expected_w = alpha/(alpha+Beta)
                         T = task_structure.transitions_cake(p=expected_w)
 
                         # Belief update and Bellman equation
@@ -211,25 +205,31 @@ def simulate_trajectory_uncertainty(
         beta_trajectory.append(b)
 
     if plot:
-        actions_executed = np.array(actions_executed)
         alpha_trajectory = np.array(alpha_trajectory)
         beta_trajectory = np.array(beta_trajectory)
         expected_w = alpha_trajectory/(alpha_trajectory + beta_trajectory)
-        time = np.arange(horizon)
-        plt.plot(expected_w, label='expected w')
-        plt.scatter(time[actions_executed == 1],
-                    expected_w[:-1][actions_executed == 1],
-                    label='action=cooperate')
-        plt.xticks(np.arange(0, horizon+1, 5))
-        plt.legend(fontsize=14)
-        plt.show()
+        plotter.plot_single_trajectory(
+            actions_executed, expected_w, horizon, action_label='cooperate',
+            w_label='expected w')
 
     return actions_executed, s_trajectory, alpha_trajectory, beta_trajectory
 
 
+def beta_prior_on_grid(w_grid, a, b):
+    w_grid = np.asarray(w_grid)
+    N = len(w_grid)
+    dw = np.zeros(N)  # compute bin widths
+    dw[1:-1] = 0.5 * (w_grid[2:] - w_grid[:-2])
+    dw[0] = 0.5 * (w_grid[1] - w_grid[0])
+    dw[-1] = 0.5 * (w_grid[-1] - w_grid[-2])
+    # convert to probability mass
+    pdf_vals = beta.pdf(w_grid, a, b)
+    p = pdf_vals * dw
+    p /= p.sum()
+    return p
+
+
 # %%
-
-
 STATES = np.arange(2)
 ACTIONS = np.full(len(STATES), np.nan, dtype=object)
 ACTIONS = [['tempt', 'resist']
@@ -260,10 +260,10 @@ sns.heatmap(policy_opt[state_to_get, :][np.newaxis, :], linewidths=0.5,
 ax.set_yticks([])
 ax.set_xlabel('time step')
 
-# %% with learning
+# %% with w training
 eta = 0.2
 dw = 0.01
-V_opt, policy_opt, Q_values = willpower_increase(
+V_opt, policy_opt, Q_values = willpower_training(
     eta, dw, STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
     reward_func_last)
 
@@ -274,7 +274,7 @@ a, s, w = simulate_trajectory(
 
 # %% with uncertainty in willpower
 a0 = 1
-b0 = 2
+b0 = 1
 V_opt_expl, policy_opt_expl, Q_values_expl = uncertain_willpower(
     STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func, reward_func_last,
     a0=a0, b0=b0)
@@ -286,11 +286,12 @@ _, _, alpha_traj, beta_traj = simulate_trajectory_uncertainty(
 
 
 # %% with learning and uncertainty in w
-HORIZON = 10
-eta = 0.0
+HORIZON = 14
+eta = 0.2
 dw = 0.01
 w_grid = np.arange(0, 1.0+dw, dw)
-belief_w = np.ones(len(w_grid))/len(w_grid)
+# set belief as a discretised beta prior (a, b)
+belief_w = beta_prior_on_grid(w_grid, 1, 2)  # np.ones(len(w_grid))/len(w_grid)
 belief_w = bamdp_tree.np_to_tuple(belief_w)
 mdp = bamdp_tree.CakeMDP(states=[0, 1],
                          state_to_action_space=[[0, 1] for _ in range(2)],
@@ -307,8 +308,7 @@ h0 = bamdp_tree.BeliefState(s=0, belief_w=belief_w, t=0)
 list_of_h_sets = bamdp_tree.forward_pass(h0, HORIZON, mdp)
 V, Q, pi = bamdp_tree.backward_pass(list_of_h_sets, mdp)
 
-# %%
-# simulate
+# %% simulate
 w_true_init = 0.3
 trajectory, rewards, actions, w_trues = bamdp_tree.online_simulation(
     pi, h0, w_true_init, w_grid, eta, HORIZON, mdp)
@@ -318,13 +318,6 @@ if plot:
     for i in range(HORIZON + 1):
         w_expected = np.sum(np.array(trajectory[i].belief_w) * w_grid)
         w_trajectory.append(w_expected)
-    actions = np.array(actions)
-    w_trajectory = np.array(w_trajectory)
-    time = np.arange(HORIZON)
-    plt.plot(w_trajectory, label='w')
-    plt.scatter(time[actions == 1],
-                w_trajectory[:-1][actions == 1],
-                label='action=cooperate')
-    plt.xticks(np.arange(0, HORIZON+1, 5))
-    plt.legend(fontsize=14)
-    plt.show()
+    plotter.plot_single_trajectory(
+        actions, w_trajectory, HORIZON, action_label='cooperate',
+        w_label='expected w')
