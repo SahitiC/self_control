@@ -182,8 +182,8 @@ def simulate_trajectory_uncertainty(
     beta_trajectory = [b0]
 
     for t in range(horizon):
-        i_a = a - 1
-        i_b = b - 1
+        i_a = a - a0
+        i_b = b - b0
         action = int(policy_opt_expl[s, i_a, i_b, t])
         actions_executed.append(action)
         T = task_structure.transitions_cake(p=w_true)  # transition by true w
@@ -234,47 +234,63 @@ STATES = np.arange(2)
 ACTIONS = np.full(len(STATES), np.nan, dtype=object)
 ACTIONS = [['tempt', 'resist']
            for i in range(len(STATES))]
-HORIZON = 15  # deadline
+HORIZON = 14  # deadline
 DISCOUNT_FACTOR = 1
 # utilities :
-REWARD_TEMPT = 0.5
+REWARD_TEMPT = 0.4
 EFFORT_RESIST = -0.1
 REWARD_RESIST = 0.8
 # probability of successfully resisting
-P_SUCCESS = 0.33
+P_SUCCESS = 0.24
 state_to_get = 0  # state to plot the policies for
 
-# %% policy without learning in w
+# %% policy without training in w
 
 reward_func, reward_func_last = task_structure.rewards_cake(
     REWARD_TEMPT, EFFORT_RESIST, REWARD_RESIST)
 T = task_structure.transitions_cake(p=P_SUCCESS)
-
 V_opt, policy_opt, Q_values = mdp_algms.find_optimal_policy_prob_rewards(
     STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func, reward_func_last,
     T)
-
+# plot policy
 f, ax = plt.subplots(figsize=(5, 2))
-sns.heatmap(policy_opt[state_to_get, :][np.newaxis, :], linewidths=0.5,
+sns.heatmap(policy_opt[state_to_get, :][np.newaxis, :],
             cmap=sns.color_palette('husl', 2), cbar=False, vmin=0, vmax=1)
 ax.set_yticks([])
 ax.set_xlabel('time step')
 
+# %% plot policy across w_grid (without training)
+dw = 0.01
+w_grid = np.arange(0, 1+dw, dw)
+policy_w = []
+for w in w_grid:
+    T = task_structure.transitions_cake(p=w)
+    V_opt, policy_opt, Q_values = mdp_algms.find_optimal_policy_prob_rewards(
+        STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
+        reward_func_last, T)
+    policy_w.append(policy_opt[0, :])  # policy is the same for s= 0 or 1
+policy_w = np.array(policy_w)
+plotter.plot_w_policy(policy_w, w_grid, dw, HORIZON)
+
 # %% with w training
 eta = 0.2
 dw = 0.01
+w_grid = np.arange(0, 1+dw, dw)
 V_opt, policy_opt, Q_values = willpower_training(
     eta, dw, STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
     reward_func_last)
+
+# plot policy in w grid over time
+plotter.plot_w_policy(policy_opt[:, 0, :], w_grid, dw, HORIZON)
 
 # simulate trajectories
 w_init = 0.3
 a, s, w = simulate_trajectory(
     policy_opt, w_init, eta, dw, STATES, HORIZON, plot=True)
 
-# %% with uncertainty in willpower
+# %% with uncertainty in willpower (no training)
 a0 = 1
-b0 = 1
+b0 = 3
 V_opt_expl, policy_opt_expl, Q_values_expl = uncertain_willpower(
     STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func, reward_func_last,
     a0=a0, b0=b0)
@@ -284,8 +300,10 @@ w_real = 0.3
 _, _, alpha_traj, beta_traj = simulate_trajectory_uncertainty(
     policy_opt_expl, a0, b0, w_real, STATES, HORIZON, plot=True)
 
+# %% plot policy for expected w (a/a+b)
+for t in range(HORIZON+1):
 
-# %% with learning and uncertainty in w
+    # %% with training and uncertainty in w
 HORIZON = 14
 eta = 0.2
 dw = 0.01
