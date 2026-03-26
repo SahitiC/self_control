@@ -557,8 +557,9 @@ for t in range(HORIZON):
 avg_cooperation = pd.DataFrame(
     [(w, t, p) for (w, t), p in avg_cooperation.items()],
     columns=["w", "time", "avg"])
+avg_cooperation["w_bin"] = pd.cut(avg_cooperation["w"], bins=100)
 heatmap_df = avg_cooperation.pivot_table(
-    index="w",
+    index="w_bin",
     columns="time",
     values="avg")
 f, ax = plt.subplots(figsize=(5, 4))
