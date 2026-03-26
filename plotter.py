@@ -5,17 +5,18 @@ import seaborn as sns
 mpl.rcParams['font.size'] = 18
 
 
-def plot_single_trajectory(actions_executed, w_trajectory, horizon,
-                           action_label='cooperate', w_label='w'):
+def plot_single_trajectory(actions_executed, w_trajectory, horizon, t_start=0,
+                           action_label='cooperate', w_label='w', legend=True):
     actions_executed = np.array(actions_executed)
     w_trajectory = np.array(w_trajectory)
-    time = np.arange(horizon)
-    plt.plot(w_trajectory, label=w_label)
-    plt.scatter(time[actions_executed == 1],
+    time = np.arange(t_start, horizon+1)
+    plt.plot(time, w_trajectory, label=w_label, color='k', linestyle='--')
+    plt.scatter(time[:-1][actions_executed == 1],
                 w_trajectory[:-1][actions_executed == 1],
-                label=action_label)
-    plt.xticks(np.arange(0, horizon+1, 5))
-    plt.legend(fontsize=12)
+                label=action_label, color=sns.color_palette('husl', 2)[1])
+    plt.xticks(np.arange(t_start, horizon+1, 5))
+    if legend:
+        plt.legend(fontsize=12)
 
 
 def plot_w_policy(policy, w_grid, dw, horizon):

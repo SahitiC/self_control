@@ -192,7 +192,7 @@ def forward_pass(h0, horizon, mdp):
     return belief_state_sets
 
 
-def solve_node(h, V, Q, pi, mdp):
+def solve_node(h, V, Q, pi, pi_w, mdp):
 
     # Return the solved value if desired.
     if h in V:
@@ -209,8 +209,8 @@ def solve_node(h, V, Q, pi, mdp):
     reward_fn = mdp.reward_fn
 
     Q_h = []
-
     t = h.t
+    expected_w_t = (t, h.s, np.sum(h.belief_w*w_grid))
 
     for a in action_space:
 
@@ -235,6 +235,7 @@ def solve_node(h, V, Q, pi, mdp):
     Q[h] = Q_h
     V[h] = Q_max
     pi[h] = a_max
+    pi_w[expected_w_t] = a_max
 
 
 def backward_pass(list_of_h_sets, mdp):
@@ -242,6 +243,7 @@ def backward_pass(list_of_h_sets, mdp):
     V = dict()
     Q = dict()
     pi = dict()
+    pi_w = dict()  # policy dict where time and expected w are indices
 
     reward_resist = mdp.reward_resist
     reward_last_fn = mdp.reward_last_fn
@@ -252,12 +254,13 @@ def backward_pass(list_of_h_sets, mdp):
 
     for hs in list_of_h_sets[-2::-1]:
         for h in hs:
-            solve_node(h, V, Q, pi, mdp)
+            solve_node(h, V, Q, pi, pi_w, mdp)
 
-    return V, Q, pi
+    return V, Q, pi, pi_w
 
 
-def online_simulation(pi, h0, w_true_init, w_grid, eta, horizon, mdp):
+def online_simulation(pi, h0, w_true_init, w_grid, eta, horizon, mdp,
+                      t_start=0):
 
     trajectory = [h0]
     rewards = []
@@ -291,7 +294,7 @@ def online_simulation(pi, h0, w_true_init, w_grid, eta, horizon, mdp):
         w_true = w_true_linear_update(w_true, next_state == 1, eta)
         return next_h, r[next_state], w_true
 
-    for t in range(horizon):
+    for t in range(t_start, horizon):
         a = pi[h]
         actions.append(a)
         h, r, w_true = true_transition(h, a, w_true, eta, mdp)

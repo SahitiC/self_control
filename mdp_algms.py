@@ -303,7 +303,7 @@ def find_optimal_policy_beta_delta(
     return V_opt_full, policy_opt_full, Q_values_full
 
 
-def forward_runs(policy, initial_state, horizon, states, T):
+def forward_runs(policy, initial_state, horizon, states, T, t_start=0):
     """
     simulate actions taken and states reached forward in time given
     a policy and initial state in an mdp
@@ -324,20 +324,19 @@ def forward_runs(policy, initial_state, horizon, states, T):
     """
 
     # arrays to store states, actions taken and values of actions in time
-    states_forward = np.full(horizon+1, 100)
-    actions_forward = np.full(horizon, 100)
+    states_forward = np.full(horizon+1-t_start, 100)
+    actions_forward = np.full(horizon-t_start, 100)
 
     states_forward[0] = initial_state
 
-    for i_timestep in range(horizon):
+    for i in range(horizon-t_start):
 
         # action at a state and timestep as given by policy
-        actions_forward[i_timestep] = policy[states_forward[i_timestep],
-                                             i_timestep]
+        actions_forward[i] = policy[states_forward[i], i]
         # sample next state from transition probabilities
-        states_forward[i_timestep+1] = np.random.choice(
+        states_forward[i+1] = np.random.choice(
             len(states),
-            p=T[states_forward[i_timestep]][actions_forward[i_timestep]])
+            p=T[states_forward[i]][actions_forward[i]])
 
     return states_forward, actions_forward
 
