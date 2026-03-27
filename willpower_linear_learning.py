@@ -10,7 +10,8 @@ import matplotlib as mpl
 from scipy.stats import beta
 import pandas as pd
 mpl.rcParams['font.size'] = 18
-
+plt.rcParams.update({
+    "text.usetex": True})
 # %%
 
 # willpower learning
@@ -296,6 +297,9 @@ for w in w_grid:
     policy_w.append(policy_opt[0, :])  # policy is the same for s= 0 or 1
 policy_w = np.array(policy_w)
 plotter.plot_w_policy(policy_w, w_grid, dw, HORIZON)
+plt.savefig(
+    f'plots/vectors/policy_no_training_no_exploration.svg',
+    format='svg', dpi=300)
 
 # %% plot avg cooperation in future
 avg_cooperation = np.full((len(w_grid), HORIZON), np.nan)
@@ -320,8 +324,11 @@ ax.set_ylabel('w')
 ax.invert_yaxis()
 colorbar = ax.collections[0].colorbar
 colorbar.set_label('Avg future cooperation', rotation=270, labelpad=20)
+plt.savefig(
+    f'plots/vectors/avg_cooperation_no_training_no_exploration.svg',
+    format='svg', dpi=300)
 
-# %% plot mean trajectories
+# %% get mean trajectories
 w = 0.33
 T = task_structure.transitions_cake(p=w)
 V_opt, policy_opt, Q_values = mdp_algms.find_optimal_policy_prob_rewards(
@@ -349,6 +356,9 @@ a, s, w = simulate_trajectory(
 
 # %% plot policy in w grid over time
 plotter.plot_w_policy(policy_opt[:, 0, :], w_grid, dw, HORIZON)
+plt.savefig(
+    f'plots/vectors/policy_only_training.svg',
+    format='svg', dpi=300)
 
 # %% plot avg cooperation in future in w and time space
 avg_cooperation = np.full((len(w_grid), HORIZON), np.nan)
@@ -373,8 +383,11 @@ ax.set_ylabel('w')
 ax.invert_yaxis()
 colorbar = ax.collections[0].colorbar
 colorbar.set_label('Avg future cooperation', rotation=270, labelpad=20)
+plt.savefig(
+    f'plots/vectors/avg_cooperation_only_training.svg',
+    format='svg', dpi=300)
 
-# %% plot mean trajectories
+# %% get mean trajectories
 w_init = 0.33
 ws = []
 acs = []
@@ -389,9 +402,15 @@ avg_cooperation_training_no_uncertainty = np.mean(acs, axis=0)
 
 # %% plot example trajectories
 plotter.plot_single_trajectory(acs[11], ws[11], HORIZON, legend=False)
-plotter.plot_single_trajectory(acs[12], ws[12], HORIZON, legend=False)
+plotter.plot_single_trajectory(acs[15], ws[15], HORIZON, legend=False)
 plotter.plot_single_trajectory(acs[16], ws[16], HORIZON, legend=False)
 plt.xlabel('time')
+plt.savefig(
+    f'plots/vectors/trajectories_only_training.svg',
+    format='svg', dpi=300)
+
+ac_only_training = acs[15]
+w_only_training = ws[15]
 
 # %% with uncertainty in willpower (no training)
 a0 = 1
@@ -417,11 +436,14 @@ ax.set_yticks([])
 ax.set_xticks(np.arange(0, HORIZON+1, 5))
 ax.set_xticklabels(np.arange(0, HORIZON+1, 5))
 ax.set_xlabel('time step')
-ax.set_ylabel('expected w')
+ax.set_ylabel('$E(w)$')
 ax.invert_yaxis()
 colorbar = ax.collections[0].colorbar
 colorbar.set_ticks([0.25, 0.75])
 colorbar.set_ticklabels([0, 1])
+plt.savefig(
+    f'plots/vectors/policy_only_exploration.svg',
+    format='svg', dpi=300)
 
 # %% plot avg cooperation in future in w and time space
 alphas = np.arange(1, HORIZON+a0+1, 1)
@@ -457,7 +479,9 @@ ax.set_ylabel('w')
 ax.invert_yaxis()
 colorbar = ax.collections[0].colorbar
 colorbar.set_label('Avg future cooperation', rotation=270, labelpad=20)
-
+plt.savefig(
+    f'plots/vectors/avg_cooperation_only_exploration.svg',
+    format='svg', dpi=300)
 
 # %% get avg trajectories
 w_real = 0.33
@@ -475,9 +499,14 @@ avg_cooperation_no_training_uncertainty = np.mean(acs, axis=0)
 
 # %% plot example trajectories
 plotter.plot_single_trajectory(acs[4], ws[4], HORIZON, legend=False)
-plotter.plot_single_trajectory(acs[7], ws[7], HORIZON, legend=False)
-plotter.plot_single_trajectory(acs[10], ws[10], HORIZON, legend=False)
+plotter.plot_single_trajectory(acs[8], ws[8], HORIZON, legend=False)
+plotter.plot_single_trajectory(acs[9], ws[9], HORIZON, legend=False)
 plt.xlabel('time')
+plt.savefig(
+    f'plots/vectors/trajectories_only_exploration.svg',
+    format='svg', dpi=300)
+ac_only_explorations = acs[13]
+w_only_exploration = ws[13]
 
 # %% with training and uncertainty in w
 HORIZON = 14
@@ -528,6 +557,9 @@ ax.invert_yaxis()
 colorbar = ax.collections[0].colorbar
 colorbar.set_ticks([0.25, 0.75])
 colorbar.set_ticklabels([0, 1])
+plt.savefig(
+    f'plots/vectors/policy_training_exploration.svg',
+    format='svg', dpi=300)
 
 # %% simulate
 w_true_init = 0.33
@@ -572,7 +604,9 @@ ax.set_ylabel('w')
 ax.invert_yaxis()
 colorbar = ax.collections[0].colorbar
 colorbar.set_label('Avg future cooperation', rotation=270, labelpad=20)
-
+plt.savefig(
+    f'plots/vectors/avg_cooperation_training_exploration.svg',
+    format='svg', dpi=300)
 
 # %% get average trajectories
 w_true_init = 0.33
@@ -591,21 +625,48 @@ ws = np.array(ws)
 acs = np.array(acs)
 avg_cooperation_training_uncertainty = np.mean(acs, axis=0)
 
-# %% plot example trajectories
-plotter.plot_single_trajectory(acs[7], ws[7], HORIZON, legend=False)
+# %% plot example trajectories + compare with prev two cases
+# plotter.plot_single_trajectory(acs[6], ws[6], HORIZON, legend=False)
+# plt.xlabel('time')
+time = np.arange(0, HORIZON+1)
+plt.plot(time, ws[2], label='training + exploration', color='tab:red',
+         linestyle='--')
+plt.scatter(time[:-1][acs[2] == 1],
+            ws[2][:-1][acs[2] == 1],
+            color=sns.color_palette('husl', 2)[1])
+plt.plot(time, w_only_training, label='only training', color='tab:orange',
+         linestyle='--')
+plt.scatter(time[:-1][ac_only_training == 1],
+            w_only_training[:-1][ac_only_training == 1],
+            color=sns.color_palette('husl', 2)[1])
+plt.plot(time, w_only_exploration, label='only exploration', color='tab:green',
+         linestyle='--')
+plt.scatter(time[:-1][ac_only_explorations == 1],
+            w_only_exploration[:-1][ac_only_explorations == 1],
+            color=sns.color_palette('husl', 2)[1])
+plt.xticks(np.arange(0, HORIZON+1, 5))
 plt.xlabel('time')
+plt.legend(fontsize=12)
+plt.savefig(
+    f'plots/vectors/trajectories_training_exploration.svg',
+    format='svg', dpi=300)
 
 # %% plot avg cooperation in all cases
 time = np.arange(HORIZON)
 plt.plot(time, avg_cooperation_no_training_no_uncertainty,
          label='no training, no exploration', linewidth=2)
 plt.plot(time, avg_cooperation_training_no_uncertainty,
-         label='training, no exploration', linewidth=2)
+         label='only training', linewidth=2)
 plt.plot(time, avg_cooperation_no_training_uncertainty,
-         label='no training, exploration', linewidth=2)
+         label='only exploration', linewidth=2)
 plt.plot(time, avg_cooperation_training_uncertainty,
-         label='training, exploration', linewidth=2)
-plt.legend(bbox_to_anchor=(1, 0.5))
+         label='training + exploration', linewidth=2)
+plt.legend(bbox_to_anchor=(1, 0.5), fontsize=14)
 plt.xticks(np.arange(0, HORIZON, 3))
 plt.xlabel('time')
 plt.title('Average cooperation')
+plt.savefig(
+    f'plots/vectors/avg_cooperation_all.svg',
+    format='svg', dpi=300)
+
+# %%
