@@ -270,7 +270,7 @@ REWARD_TEMPT = 0.5
 EFFORT_RESIST = -0.1
 REWARD_RESIST = 0.8
 # probability of successfully resisting
-P_SUCCESS = 0.33
+P_SUCCESS = 0.25
 state_to_get = 0  # state to plot the policies for
 
 np.random.seed(0)
@@ -322,7 +322,7 @@ colorbar = ax.collections[0].colorbar
 colorbar.set_label('Avg future cooperation', rotation=270, labelpad=20)
 
 # %% plot mean trajectories
-w = 0.33
+w = 0.25
 T = task_structure.transitions_cake(p=w)
 V_opt, policy_opt, Q_values = mdp_algms.find_optimal_policy_prob_rewards(
     STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
@@ -395,7 +395,7 @@ plt.xlabel('time')
 
 # %% with uncertainty in willpower (no training)
 a0 = 1
-b0 = 2
+b0 = 3
 V_opt_expl, policy_opt_expl, Q_values_expl, policy_dicts = uncertain_willpower(
     STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func, reward_func_last,
     a0=a0, b0=b0)
@@ -426,7 +426,7 @@ colorbar.set_ticklabels([0, 1])
 # %% plot avg cooperation in future in w and time space
 alphas = np.arange(1, HORIZON+a0+1, 1)
 betas = np.arange(1, HORIZON+b0+1, 1)
-w_true = 0.33
+w_true = 0.25
 avg_cooperation = {}
 for t in range(HORIZON):
     for i_a, alpha in enumerate(alphas):
@@ -460,7 +460,7 @@ colorbar.set_label('Avg future cooperation', rotation=270, labelpad=20)
 
 
 # %% get avg trajectories
-w_real = 0.33
+w_real = 0.25
 ws = []
 acs = []
 for i in range(100):
