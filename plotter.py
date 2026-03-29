@@ -27,10 +27,9 @@ def plot_w_policy(policy, w_grid, dw, horizon):
     ax.set_yticklabels(np.arange(0, len(w_grid), int(len(w_grid)/5))*dw)
     ax.set_xticks(np.arange(0, horizon+1, 5))
     ax.set_xticklabels(np.arange(0, horizon+1, 5))
-    ax.set_xlabel('time step')
+    ax.set_xlabel('time')
     ax.set_ylabel('w')
     ax.invert_yaxis()
     colorbar = ax.collections[0].colorbar
     colorbar.set_ticks([0.25, 0.75])
     colorbar.set_ticklabels([0, 1])
-    plt.show()
