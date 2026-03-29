@@ -511,11 +511,12 @@ plotter.plot_single_trajectory(acs[8], ws[8], HORIZON, legend=False)
 plotter.plot_single_trajectory(acs[9], ws[9], HORIZON, legend=False)
 plt.xlabel('time')
 sns.despine()
-plt.savefig(
-    f'plots/vectors/trajectories_only_exploration.svg',
-    format='svg', dpi=300)
-ac_only_explorations = acs[13]
-w_only_exploration = ws[13]
+if SAVE_PLOTS:
+    plt.savefig(
+        f'plots/vectors/trajectories_only_exploration.svg',
+        format='svg', dpi=300)
+    ac_only_explorations = acs[13]
+    w_only_exploration = ws[13]
 
 # %% with training and uncertainty in w
 HORIZON = 14
