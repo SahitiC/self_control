@@ -7,6 +7,17 @@ horizons, does reward depend on the next state etc.
 
 import numpy as np
 
+def tolerant_max(x, tol=1e-9):
+    x = np.asarray(x)
+    m = np.max(x)
+    # return the first value close to the max
+    return x[np.argmax(np.isclose(x, m, atol=tol, rtol=0))]
+
+def tolerant_argmax(x, tol=1e-9):
+    x = np.asarray(x)
+    m = np.max(x)
+    return np.argmax(np.isclose(x, m, atol=tol, rtol=0))
+
 
 def find_optimal_policy(states, actions, horizon, discount_factor,
                         reward_func, reward_func_last, T):
@@ -122,8 +133,8 @@ def find_optimal_policy_prob_rewards(states, actions, horizon, discount_factor,
                                                             i_timestep+1]))
 
             # find optimal action (which gives max q-value)
-            V_opt[i_state, i_timestep] = np.max(Q)
-            policy_opt[i_state, i_timestep] = np.argmax(Q)
+            V_opt[i_state, i_timestep] = tolerant_max(Q)
+            policy_opt[i_state, i_timestep] = tolerant_argmax(Q)
             Q_values[i_state][:, i_timestep] = Q
 
     return V_opt, policy_opt, Q_values
