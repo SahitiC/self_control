@@ -7,6 +7,7 @@ import mdp_algms
 import task_structure
 import bamdp_tree
 import matplotlib as mpl
+import matplotlib.colors as mcolors
 from scipy.stats import beta
 import pandas as pd
 mpl.rcParams['font.size'] = 18
@@ -257,6 +258,15 @@ def beta_prior_on_grid(w_grid, a, b):
     return p
 
 
+def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
+    """Truncates a colormap."""
+    new_cmap = mcolors.LinearSegmentedColormap.from_list(
+        f'trunc({cmap.name},{minval:.2f},{maxval:.2f})',
+        cmap(np.linspace(minval, maxval, n))
+    )
+    return new_cmap
+
+
 # %%
 STATES = np.arange(2)
 ACTIONS = np.full(len(STATES), np.nan, dtype=object)
@@ -269,9 +279,12 @@ REWARD_TEMPT = 0.5
 EFFORT_RESIST = -0.1
 REWARD_RESIST = 0.8
 # probability of successfully resisting
-P_SUCCESS = 0.25
+P_SUCCESS = 1/3
 state_to_get = 0  # state to plot the policies for
-SAVE_PLOTS = False
+SAVE_PLOTS = True
+original_cmap = plt.get_cmap('GnBu')
+# Use only the part of the original cmap
+GnBu_trunc = truncate_colormap(original_cmap, 0.2, 1.0)
 np.random.seed(0)
 
 # %% policy without training in w
@@ -313,7 +326,7 @@ for t in range(HORIZON):
         avg_cooperation[i_w, t] = np.mean(all_actions)
 
 f, ax = plt.subplots(figsize=(5, 4))
-sns.heatmap(avg_cooperation, cmap='coolwarm')
+sns.heatmap(avg_cooperation, cmap=GnBu_trunc, linewidths=0, rasterized=True)
 ax.set_xticks(np.arange(0, HORIZON+1, 5))
 ax.set_xticklabels(np.arange(0, HORIZON+1, 5))
 ax.set_xlabel('time step')
@@ -321,15 +334,16 @@ ax.set_yticks(np.arange(0, len(w_grid), int(len(w_grid)/5)))
 ax.set_yticklabels(np.arange(0, len(w_grid), int(len(w_grid)/5))*dw)
 ax.set_ylabel('w')
 ax.invert_yaxis()
+ax.grid(False)
 colorbar = ax.collections[0].colorbar
-colorbar.set_label('Avg future cooperation', rotation=270, labelpad=20)
+colorbar.set_label(f"Avg % future 'try' actions", rotation=270, labelpad=20)
 if SAVE_PLOTS:
     plt.savefig(
         f'plots/vectors/avg_cooperation_no_training_no_exploration.svg',
         format='svg', dpi=300)
 
 # %% get mean trajectories
-w = 0.25
+w = 1/3
 T = task_structure.transitions_cake(p=w)
 V_opt, policy_opt, Q_values = mdp_algms.find_optimal_policy_prob_rewards(
     STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func,
@@ -350,7 +364,7 @@ V_opt, policy_opt, Q_values = willpower_training(
     reward_func_last)
 
 # simulate example trajectory
-w_init = 0.25
+w_init = 1/3
 a, s, w = simulate_trajectory(
     policy_opt, w_init, eta, dw, STATES, HORIZON, t_start=0, plot=True)
 
@@ -374,7 +388,7 @@ for t in range(HORIZON):
         avg_cooperation[i_w, t] = np.mean(all_actions)
 
 f, ax = plt.subplots(figsize=(5, 4))
-sns.heatmap(avg_cooperation, cmap='coolwarm')
+sns.heatmap(avg_cooperation, cmap=GnBu_trunc, linewidths=0, rasterized=True)
 ax.set_xticks(np.arange(0, HORIZON+1, 5))
 ax.set_xticklabels(np.arange(0, HORIZON+1, 5))
 ax.set_xlabel('time step')
@@ -382,15 +396,15 @@ ax.set_yticks(np.arange(0, len(w_grid), int(len(w_grid)/5)))
 ax.set_yticklabels(np.arange(0, len(w_grid), int(len(w_grid)/5))*dw)
 ax.set_ylabel('w')
 ax.invert_yaxis()
+ax.grid(False)
 colorbar = ax.collections[0].colorbar
-colorbar.set_label('Avg future cooperation', rotation=270, labelpad=20)
+colorbar.set_label(f"Avg % future 'try' actions", rotation=270, labelpad=20)
 if SAVE_PLOTS:
     plt.savefig(
         f'plots/vectors/avg_cooperation_only_training.svg',
         format='svg', dpi=300)
 
 # %% get mean trajectories
-w_init = 0.25
 ws = []
 acs = []
 for i in range(100):
@@ -403,28 +417,31 @@ acs = np.array(acs)
 avg_cooperation_training_no_uncertainty = np.mean(acs, axis=0)
 
 # %% plot example trajectories
-plotter.plot_single_trajectory(acs[11], ws[11], HORIZON, legend=False)
-plotter.plot_single_trajectory(acs[15], ws[15], HORIZON, legend=False)
-plotter.plot_single_trajectory(acs[16], ws[16], HORIZON, legend=False)
-plt.xlabel('time')
+plt.figure(figsize=(4, 4))
+plotter.plot_single_trajectory(acs[11], ws[11], HORIZON, action_label='Try',
+                               legend=False)
+plotter.plot_single_trajectory(acs[15], ws[15], HORIZON, action_label='Try',
+                               legend=False)
+plotter.plot_single_trajectory(acs[16], ws[16], HORIZON, action_label='Try')
+plt.xlabel('trial')
 sns.despine()
 if SAVE_PLOTS:
     plt.savefig(
         f'plots/vectors/trajectories_only_training.svg',
         format='svg', dpi=300)
 
-ac_only_training = acs[15]
-w_only_training = ws[15]
+ac_only_training = acs[22]
+w_only_training = ws[22]
 
 # %% with uncertainty in willpower (no training)
 a0 = 1
-b0 = 3
+b0 = 2
 V_opt_expl, policy_opt_expl, Q_values_expl, policy_dicts = uncertain_willpower(
     STATES, ACTIONS, HORIZON, DISCOUNT_FACTOR, reward_func, reward_func_last,
     a0=a0, b0=b0)
 
 # simulate example trajectories
-w_real = 0.25
+w_real = 1/3
 _, _, alpha_traj, beta_traj = simulate_trajectory_uncertainty(
     policy_opt_expl, a0, b0, a0, b0, w_real, STATES, HORIZON, plot=True)
 
@@ -434,14 +451,14 @@ policy_df = pd.DataFrame(policy_dicts)
 policy_df.columns = policy_df.columns.astype(float)
 policy_df = policy_df.sort_index(axis=1)
 f, ax = plt.subplots(figsize=(5, 4))
-policy_df=policy_df.interpolate(axis=1)
+# policy_df = policy_df.interpolate(axis=1)
 sns.heatmap(policy_df.T, cmap=sns.color_palette('husl', 2), cbar=True,
             vmin=0, vmax=1)
 ax.set_yticks([])
 ax.set_xticks(np.arange(0, HORIZON+1, 5))
 ax.set_xticklabels(np.arange(0, HORIZON+1, 5))
 ax.set_xlabel('time step')
-ax.set_ylabel('$E(w)$')
+ax.set_ylabel('E(w)')
 ax.invert_yaxis()
 colorbar = ax.collections[0].colorbar
 colorbar.set_ticks([0.25, 0.75])
@@ -454,7 +471,6 @@ if SAVE_PLOTS:
 # %% plot avg cooperation in future in w and time space
 alphas = np.arange(1, HORIZON+a0+1, 1)
 betas = np.arange(1, HORIZON+b0+1, 1)
-w_true = 0.25
 avg_cooperation = {}
 for t in range(HORIZON):
     for i_a, alpha in enumerate(alphas):
@@ -464,8 +480,8 @@ for t in range(HORIZON):
             all_actions = []
             for _ in range(100):
                 a, _, _, _ = simulate_trajectory_uncertainty(
-                    policy_opt_expl, alpha, Beta, a0, b0, w_true, STATES, HORIZON,
-                    t_start=t, plot=False)
+                    policy_opt_expl, alpha, Beta, a0, b0, w_real, STATES,
+                    HORIZON, t_start=t, plot=False)
                 all_actions.extend(a)
             avg_cooperation[(alpha/(alpha+Beta), t)] = np.mean(all_actions)
 avg_cooperation = pd.DataFrame(
@@ -476,23 +492,24 @@ heatmap_df = avg_cooperation.pivot_table(
     columns="time",
     values="avg")
 f, ax = plt.subplots(figsize=(5, 4))
-heatmap_df=heatmap_df.interpolate(axis=0)
-sns.heatmap(heatmap_df, vmin=0, vmax=1, cmap='coolwarm')
+# heatmap_df = heatmap_df.interpolate(axis=0, limit_direction="both")
+sns.heatmap(heatmap_df, vmin=0, vmax=1, cmap=GnBu_trunc, linewidths=0,
+            rasterized=True)
 ax.set_xticks(np.arange(0, HORIZON+1, 5))
 ax.set_xticklabels(np.arange(0, HORIZON+1, 5))
-ax.set_xlabel('time step')
+ax.set_xlabel('trial')
 ax.set_yticks([])
-ax.set_ylabel('w')
+ax.set_ylabel('E(w)')
 ax.invert_yaxis()
+ax.grid(False)
 colorbar = ax.collections[0].colorbar
-colorbar.set_label('Avg future cooperation', rotation=270, labelpad=20)
+colorbar.set_label(f"Avg % future 'try' actions", rotation=270, labelpad=20)
 if SAVE_PLOTS:
     plt.savefig(
         f'plots/vectors/avg_cooperation_only_exploration.svg',
         format='svg', dpi=300)
 
 # %% get avg trajectories
-w_real = 0.25
 ws = []
 acs = []
 for i in range(100):
@@ -506,17 +523,22 @@ acs = np.array(acs)
 avg_cooperation_no_training_uncertainty = np.mean(acs, axis=0)
 
 # %% plot example trajectories
-plotter.plot_single_trajectory(acs[4], ws[4], HORIZON, legend=False)
-plotter.plot_single_trajectory(acs[8], ws[8], HORIZON, legend=False)
-plotter.plot_single_trajectory(acs[9], ws[9], HORIZON, legend=False)
-plt.xlabel('time')
+plt.figure(figsize=(4, 4))
+plotter.plot_single_trajectory(acs[4], ws[4], HORIZON, action_label='try',
+                               w_label='E(w)', legend=False)
+plotter.plot_single_trajectory(acs[8], ws[8], HORIZON, action_label='try',
+                               w_label='E(w)', legend=False)
+plotter.plot_single_trajectory(acs[9], ws[9], HORIZON, action_label='try',
+                               w_label='E(w)')
+plt.xlabel('trial')
+plt.ylim(0.1, 1.05)
 sns.despine()
 if SAVE_PLOTS:
     plt.savefig(
         f'plots/vectors/trajectories_only_exploration.svg',
         format='svg', dpi=300)
-    ac_only_explorations = acs[13]
-    w_only_exploration = ws[13]
+ac_only_exploration = acs[0]
+w_only_exploration = ws[0]
 
 # %% with training and uncertainty in w
 HORIZON = 14
@@ -525,7 +547,7 @@ dw = 0.01
 w_grid = np.arange(0, 1.0+dw, dw)
 # set belief as a discretised beta prior (a, b)
 a = 1
-b = 3
+b = 2
 belief_w = beta_prior_on_grid(w_grid, a, b)  # np.ones(len(w_grid))/len(w_grid)
 belief_w = bamdp_tree.np_to_tuple(belief_w)
 mdp = bamdp_tree.CakeMDP(states=[0, 1],
@@ -556,15 +578,16 @@ heatmap_df = policy_df.pivot_table(
     values="policy")
 # policy_df = policy_df.sort_index(axis=1)
 f, ax = plt.subplots(figsize=(5, 4))
-heatmap_df = heatmap_df.interpolate(axis=0)
+# heatmap_df = heatmap_df.interpolate(axis=0)
 sns.heatmap(heatmap_df, cmap=sns.color_palette('husl', 2), cbar=True,
-            vmin=0, vmax=1)
+            vmin=0, vmax=1, linewidths=0, rasterized=True)
 ax.set_yticks([])
 ax.set_xticks(np.arange(0, HORIZON+1, 5))
 ax.set_xticklabels(np.arange(0, HORIZON+1, 5))
-ax.set_xlabel('time step')
-ax.set_ylabel('expected w')
+ax.set_xlabel('trial')
+ax.set_ylabel('E(w)')
 ax.invert_yaxis()
+ax.grid(False)
 colorbar = ax.collections[0].colorbar
 colorbar.set_ticks([0.25, 0.75])
 colorbar.set_ticklabels([0, 1])
@@ -574,7 +597,7 @@ if SAVE_PLOTS:
         format='svg', dpi=300)
 
 # %% simulate
-w_true_init = 0.25
+w_true_init = 1/3
 trajectory, rewards, actions, w_trues = bamdp_tree.online_simulation(
     pi, h0, w_true_init, w_grid, eta, HORIZON, mdp)
 plot = True
@@ -607,23 +630,24 @@ heatmap_df = avg_cooperation.pivot_table(
     columns="time",
     values="avg")
 f, ax = plt.subplots(figsize=(5, 4))
-heatmap_df = heatmap_df.interpolate(axis=0)
-sns.heatmap(heatmap_df, cmap='coolwarm')
+# heatmap_df = heatmap_df.interpolate(axis=0)
+sns.heatmap(heatmap_df, cmap=GnBu_trunc, linewidths=0, rasterized=True, vmin=0,
+            vmax=1)
 ax.set_xticks(np.arange(0, HORIZON+1, 5))
 ax.set_xticklabels(np.arange(0, HORIZON+1, 5))
-ax.set_xlabel('time step')
+ax.set_xlabel('trial')
 ax.set_yticks([])
-ax.set_ylabel('w')
+ax.set_ylabel('E(w)')
 ax.invert_yaxis()
+ax.grid(False)
 colorbar = ax.collections[0].colorbar
-colorbar.set_label('Avg future cooperation', rotation=270, labelpad=20)
-if SAVE_PLOTS: 
+colorbar.set_label(f"Avg % future cooperation", rotation=270, labelpad=20)
+if SAVE_PLOTS:
     plt.savefig(
         f'plots/vectors/avg_cooperation_training_exploration.svg',
         format='svg', dpi=300)
 
 # %% get average trajectories
-w_true_init = 0.25
 ws = []
 acs = []
 for i in range(100):
@@ -643,24 +667,25 @@ avg_cooperation_training_uncertainty = np.mean(acs, axis=0)
 # plotter.plot_single_trajectory(acs[6], ws[6], HORIZON, legend=False)
 # plt.xlabel('time')
 time = np.arange(0, HORIZON+1)
+plt.figure(figsize=(4, 4))
 plt.plot(time, w_only_training, label='only training', color='tab:orange',
-         linestyle='--',linewidth=2)
+         linestyle='--', linewidth=2)
 plt.scatter(time[:-1][ac_only_training == 1],
-            w_only_training[:-1][ac_only_training == 1],
+            w_only_training[:-1][ac_only_training == 1], s=30,
             color=sns.color_palette('husl', 2)[1])
 plt.plot(time, w_only_exploration, label='only exploration', color='tab:green',
          linestyle='--', linewidth=2)
-plt.scatter(time[:-1][ac_only_explorations == 1],
-            w_only_exploration[:-1][ac_only_explorations == 1],
+plt.scatter(time[:-1][ac_only_exploration == 1],
+            w_only_exploration[:-1][ac_only_exploration == 1], s=30,
             color=sns.color_palette('husl', 2)[1])
-plt.plot(time, ws[2], label='training + exploration', color='tab:red',
+plt.plot(time, ws[6], label='training + exploration', color='tab:red',
          linestyle='--', linewidth=2)
-plt.scatter(time[:-1][acs[2] == 1],
-            ws[2][:-1][acs[2] == 1],
+plt.scatter(time[:-1][acs[6] == 1],
+            ws[6][:-1][acs[6] == 1], s=30,
             color=sns.color_palette('husl', 2)[1])
 plt.xticks(np.arange(0, HORIZON+1, 5))
-plt.xlabel('time')
-plt.legend(fontsize=12)
+plt.xlabel('trial')
+plt.legend(fontsize=12, frameon=False)
 sns.despine()
 if SAVE_PLOTS:
     plt.savefig(
@@ -669,6 +694,7 @@ if SAVE_PLOTS:
 
 # %% plot avg cooperation in all cases
 time = np.arange(HORIZON)
+plt.figure(figsize=(4, 4))
 plt.plot(time, avg_cooperation_no_training_no_uncertainty,
          label='no training, no exploration', linewidth=2)
 plt.plot(time, avg_cooperation_training_no_uncertainty,
@@ -677,11 +703,10 @@ plt.plot(time, avg_cooperation_no_training_uncertainty,
          label='only exploration', linewidth=2)
 plt.plot(time, avg_cooperation_training_uncertainty,
          label='training + exploration', linewidth=2)
-plt.legend(bbox_to_anchor=(1, 0.5), fontsize=14)
-plt.xticks(np.arange(0, HORIZON, 3))
-plt.xlabel('time')
-plt.title('Average cooperation')
-sns.despine()
+plt.legend(bbox_to_anchor=(1, 0.5), fontsize=12, frameon=False)
+plt.xticks(np.arange(0, HORIZON, 5))
+plt.xlabel('trial')
+plt.title(f"Average % of 'try' actions")
 if SAVE_PLOTS:
     plt.savefig(
         f'plots/vectors/avg_cooperation_all.svg',
