@@ -10,19 +10,22 @@ def plot_single_trajectory(actions_executed, w_trajectory, horizon, t_start=0,
     actions_executed = np.array(actions_executed)
     w_trajectory = np.array(w_trajectory)
     time = np.arange(t_start, horizon+1)
-    plt.plot(time, w_trajectory, label=w_label, color='k', linestyle='--', linewidth=2)
+    plt.plot(time, w_trajectory, label=w_label,
+             color='k', linestyle='--', linewidth=2)
     plt.scatter(time[:-1][actions_executed == 1],
-                w_trajectory[:-1][actions_executed == 1],
-                label=action_label, color=sns.color_palette('husl', 2)[1])
+                w_trajectory[:-1][actions_executed == 1], s=30,
+                label=action_label, color=sns.color_palette('husl', 2)[1],
+                )
     plt.xticks(np.arange(t_start, horizon+1, 5))
     if legend:
-        plt.legend(fontsize=12)
+        plt.legend(fontsize=12, frameon=False)
 
 
 def plot_w_policy(policy, w_grid, dw, horizon):
     f, ax = plt.subplots(figsize=(5, 4))
     sns.heatmap(policy,
-                cmap=sns.color_palette('husl', 2), cbar=True, vmin=0, vmax=1)
+                cmap=sns.color_palette('husl', 2), cbar=True, vmin=0, vmax=1,
+                linewidths=0, rasterized=True)
     ax.set_yticks(np.arange(0, len(w_grid), int(len(w_grid)/5)))
     ax.set_yticklabels(np.arange(0, len(w_grid), int(len(w_grid)/5))*dw)
     ax.set_xticks(np.arange(0, horizon+1, 5))
@@ -30,6 +33,7 @@ def plot_w_policy(policy, w_grid, dw, horizon):
     ax.set_xlabel('time')
     ax.set_ylabel('w')
     ax.invert_yaxis()
+    ax.grid(False)
     colorbar = ax.collections[0].colorbar
     colorbar.set_ticks([0.25, 0.75])
     colorbar.set_ticklabels([0, 1])
