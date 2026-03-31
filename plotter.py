@@ -6,12 +6,13 @@ mpl.rcParams['font.size'] = 18
 
 
 def plot_single_trajectory(actions_executed, w_trajectory, horizon, t_start=0,
-                           action_label='cooperate', w_label='w', legend=True):
+                           action_label='cooperate', w_label='w', color='k',
+                           legend=True):
     actions_executed = np.array(actions_executed)
     w_trajectory = np.array(w_trajectory)
     time = np.arange(t_start, horizon+1)
     plt.plot(time, w_trajectory, label=w_label,
-             color='k', linestyle='--', linewidth=2)
+             color=color, linestyle='--', linewidth=2)
     plt.scatter(time[:-1][actions_executed == 1],
                 w_trajectory[:-1][actions_executed == 1], s=30,
                 label=action_label, color=sns.color_palette('husl', 2)[1],

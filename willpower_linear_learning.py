@@ -281,7 +281,7 @@ REWARD_RESIST = 0.8
 # probability of successfully resisting
 P_SUCCESS = 1/3
 state_to_get = 0  # state to plot the policies for
-SAVE_PLOTS = True
+SAVE_PLOTS = False
 original_cmap = plt.get_cmap('GnBu')
 # Use only the part of the original cmap
 GnBu_trunc = truncate_colormap(original_cmap, 0.2, 1.0)
@@ -419,10 +419,11 @@ avg_cooperation_training_no_uncertainty = np.mean(acs, axis=0)
 # %% plot example trajectories
 plt.figure(figsize=(4, 4))
 plotter.plot_single_trajectory(acs[11], ws[11], HORIZON, action_label='Try',
-                               legend=False)
+                               color='tab:orange', legend=False)
 plotter.plot_single_trajectory(acs[15], ws[15], HORIZON, action_label='Try',
-                               legend=False)
-plotter.plot_single_trajectory(acs[16], ws[16], HORIZON, action_label='Try')
+                               color='tab:orange', legend=False)
+plotter.plot_single_trajectory(acs[16], ws[16], HORIZON, action_label='Try',
+                               color='tab:orange')
 plt.xlabel('trial')
 sns.despine()
 if SAVE_PLOTS:
@@ -525,11 +526,13 @@ avg_cooperation_no_training_uncertainty = np.mean(acs, axis=0)
 # %% plot example trajectories
 plt.figure(figsize=(4, 4))
 plotter.plot_single_trajectory(acs[4], ws[4], HORIZON, action_label='try',
-                               w_label='E(w)', legend=False)
+                               w_label='E(w)', color='tab:purple',
+                               legend=False)
 plotter.plot_single_trajectory(acs[8], ws[8], HORIZON, action_label='try',
-                               w_label='E(w)', legend=False)
+                               w_label='E(w)', color='tab:purple',
+                               legend=False)
 plotter.plot_single_trajectory(acs[9], ws[9], HORIZON, action_label='try',
-                               w_label='E(w)')
+                               w_label='E(w)', color='tab:purple')
 plt.xlabel('trial')
 plt.ylim(0.1, 1.05)
 sns.despine()
@@ -673,8 +676,8 @@ plt.plot(time, w_only_training, label='only training', color='tab:orange',
 plt.scatter(time[:-1][ac_only_training == 1],
             w_only_training[:-1][ac_only_training == 1], s=30,
             color=sns.color_palette('husl', 2)[1])
-plt.plot(time, w_only_exploration, label='only exploration', color='tab:green',
-         linestyle='--', linewidth=2)
+plt.plot(time, w_only_exploration, label='only exploration',
+         color='tab:purple', linestyle='--', linewidth=2)
 plt.scatter(time[:-1][ac_only_exploration == 1],
             w_only_exploration[:-1][ac_only_exploration == 1], s=30,
             color=sns.color_palette('husl', 2)[1])
@@ -696,13 +699,13 @@ if SAVE_PLOTS:
 time = np.arange(HORIZON)
 plt.figure(figsize=(4, 4))
 plt.plot(time, avg_cooperation_no_training_no_uncertainty,
-         label='no training, no exploration', linewidth=2)
+         label='no training, no exploration', linewidth=2, color='tab:blue')
 plt.plot(time, avg_cooperation_training_no_uncertainty,
-         label='only training', linewidth=2)
+         label='only training', linewidth=2, color='tab:orange')
 plt.plot(time, avg_cooperation_no_training_uncertainty,
-         label='only exploration', linewidth=2)
+         label='only exploration', linewidth=2, color='tab:purple')
 plt.plot(time, avg_cooperation_training_uncertainty,
-         label='training + exploration', linewidth=2)
+         label='training + exploration', linewidth=2, color='tab:red')
 plt.legend(bbox_to_anchor=(1, 0.5), fontsize=12, frameon=False)
 plt.xticks(np.arange(0, HORIZON, 5))
 plt.xlabel('trial')
