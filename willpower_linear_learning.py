@@ -329,7 +329,7 @@ f, ax = plt.subplots(figsize=(5, 4))
 sns.heatmap(avg_cooperation, cmap=GnBu_trunc, linewidths=0, rasterized=True)
 ax.set_xticks(np.arange(0, HORIZON+1, 5))
 ax.set_xticklabels(np.arange(0, HORIZON+1, 5))
-ax.set_xlabel('time step')
+ax.set_xlabel('trial')
 ax.set_yticks(np.arange(0, len(w_grid), int(len(w_grid)/5)))
 ax.set_yticklabels(np.arange(0, len(w_grid), int(len(w_grid)/5))*dw)
 ax.set_ylabel('w')
@@ -354,6 +354,7 @@ for _ in range(100):
     acs.append(a)
 acs = np.array(acs)
 avg_cooperation_no_training_no_uncertainty = np.mean(acs, axis=0)
+avg_w_no_training_no_uncertainty = np.full(HORIZON+1, w)
 
 # %% with w training
 eta = 0.2
@@ -391,7 +392,7 @@ f, ax = plt.subplots(figsize=(5, 4))
 sns.heatmap(avg_cooperation, cmap=GnBu_trunc, linewidths=0, rasterized=True)
 ax.set_xticks(np.arange(0, HORIZON+1, 5))
 ax.set_xticklabels(np.arange(0, HORIZON+1, 5))
-ax.set_xlabel('time step')
+ax.set_xlabel('trial')
 ax.set_yticks(np.arange(0, len(w_grid), int(len(w_grid)/5)))
 ax.set_yticklabels(np.arange(0, len(w_grid), int(len(w_grid)/5))*dw)
 ax.set_ylabel('w')
@@ -415,6 +416,7 @@ for i in range(100):
 ws = np.array(ws)
 acs = np.array(acs)
 avg_cooperation_training_no_uncertainty = np.mean(acs, axis=0)
+avg_w_training_no_uncertainty = np.mean(ws, axis=0)
 
 # %% plot example trajectories
 plt.figure(figsize=(4, 4))
@@ -425,6 +427,7 @@ plotter.plot_single_trajectory(acs[15], ws[15], HORIZON, action_label='Try',
 plotter.plot_single_trajectory(acs[16], ws[16], HORIZON, action_label='Try',
                                color='tab:orange')
 plt.xlabel('trial')
+plt.ylabel('w')
 sns.despine()
 if SAVE_PLOTS:
     plt.savefig(
@@ -458,12 +461,12 @@ sns.heatmap(policy_df.T, cmap=sns.color_palette('husl', 2), cbar=True,
 ax.set_yticks([])
 ax.set_xticks(np.arange(0, HORIZON+1, 5))
 ax.set_xticklabels(np.arange(0, HORIZON+1, 5))
-ax.set_xlabel('time step')
+ax.set_xlabel('trial')
 ax.set_ylabel('E(w)')
 ax.invert_yaxis()
 colorbar = ax.collections[0].colorbar
 colorbar.set_ticks([0.25, 0.75])
-colorbar.set_ticklabels([0, 1])
+colorbar.set_ticklabels(['give-in', 'try'])
 if SAVE_PLOTS:
     plt.savefig(
         f'plots/vectors/policy_only_exploration.svg',
@@ -522,6 +525,7 @@ for i in range(100):
 ws = np.array(ws)
 acs = np.array(acs)
 avg_cooperation_no_training_uncertainty = np.mean(acs, axis=0)
+avg_w_no_training_uncertainty = np.mean(ws, axis=0)
 
 # %% plot example trajectories
 plt.figure(figsize=(4, 4))
@@ -534,6 +538,7 @@ plotter.plot_single_trajectory(acs[8], ws[8], HORIZON, action_label='try',
 plotter.plot_single_trajectory(acs[9], ws[9], HORIZON, action_label='try',
                                w_label='E(w)', color='tab:purple')
 plt.xlabel('trial')
+plt.ylabel('E(w)')
 plt.ylim(0.1, 1.05)
 sns.despine()
 if SAVE_PLOTS:
@@ -593,7 +598,7 @@ ax.invert_yaxis()
 ax.grid(False)
 colorbar = ax.collections[0].colorbar
 colorbar.set_ticks([0.25, 0.75])
-colorbar.set_ticklabels([0, 1])
+colorbar.set_ticklabels(['give-in', 'try'])
 if SAVE_PLOTS:
     plt.savefig(
         f'plots/vectors/policy_training_exploration.svg',
@@ -665,6 +670,7 @@ for i in range(100):
 ws = np.array(ws)
 acs = np.array(acs)
 avg_cooperation_training_uncertainty = np.mean(acs, axis=0)
+avg_w_training_uncertainty = np.mean(ws, axis=0)
 
 # %% plot example trajectories + compare with prev two cases
 # plotter.plot_single_trajectory(acs[6], ws[6], HORIZON, legend=False)
@@ -688,7 +694,7 @@ plt.scatter(time[:-1][acs[6] == 1],
             color=sns.color_palette('husl', 2)[1])
 plt.xticks(np.arange(0, HORIZON+1, 5))
 plt.xlabel('trial')
-plt.legend(fontsize=12, frameon=False)
+plt.legend(fontsize=12, frameon=False, bbox_to_anchor=(0.6, 0.6))
 sns.despine()
 if SAVE_PLOTS:
     plt.savefig(
@@ -714,5 +720,21 @@ if SAVE_PLOTS:
     plt.savefig(
         f'plots/vectors/avg_cooperation_all.svg',
         format='svg', dpi=300)
+    
+time = np.arange(HORIZON+1)
+plt.figure(figsize=(4, 4))
+plt.plot(time, avg_w_no_training_no_uncertainty,
+         label='no training, no exploration', linewidth=2, color='tab:blue')
+plt.plot(time, avg_w_training_no_uncertainty,
+         label='only training', linewidth=2, color='tab:orange')
+plt.plot(time, avg_w_no_training_uncertainty,
+         label='only exploration', linewidth=2, color='tab:purple')
+plt.plot(time, avg_w_training_uncertainty,
+         label='training + exploration', linewidth=2, color='tab:red')
+plt.legend(bbox_to_anchor=(1, 0.5), fontsize=12, frameon=False)
+plt.xticks(np.arange(0, HORIZON, 5))
+plt.xlabel('trial')
+plt.title(f"Average w")
+
 
 # %%

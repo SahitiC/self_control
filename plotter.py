@@ -22,7 +22,7 @@ def plot_single_trajectory(actions_executed, w_trajectory, horizon, t_start=0,
         plt.legend(fontsize=12, frameon=False)
 
 
-def plot_w_policy(policy, w_grid, dw, horizon):
+def plot_w_policy(policy, w_grid, dw, horizon, labels=['give-in', 'try']):
     f, ax = plt.subplots(figsize=(5, 4))
     sns.heatmap(policy,
                 cmap=sns.color_palette('husl', 2), cbar=True, vmin=0, vmax=1,
@@ -31,10 +31,10 @@ def plot_w_policy(policy, w_grid, dw, horizon):
     ax.set_yticklabels(np.arange(0, len(w_grid), int(len(w_grid)/5))*dw)
     ax.set_xticks(np.arange(0, horizon+1, 5))
     ax.set_xticklabels(np.arange(0, horizon+1, 5))
-    ax.set_xlabel('time')
+    ax.set_xlabel('trial')
     ax.set_ylabel('w')
     ax.invert_yaxis()
     ax.grid(False)
     colorbar = ax.collections[0].colorbar
     colorbar.set_ticks([0.25, 0.75])
-    colorbar.set_ticklabels([0, 1])
+    colorbar.set_ticklabels(labels)
